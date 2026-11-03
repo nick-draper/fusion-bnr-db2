@@ -5,170 +5,130 @@
 
 # Db2uInstance backup and restore for IBM Fusion
 
-Production recipes for protecting a **Db2uInstance** with IBM Fusion Backup & Restore when the Db2u operator and the database do not share a namespace.
+Recipes for protecting a **Db2uInstance** when the Db2u operator and the database are in different namespaces, and for restoring that backup into another namespace.
 
-IBM’s sample, [`db2u-instance-backup-restore-recipe.yaml`](https://github.com/IBM/storage-fusion/blob/master/backup-restore/recipes/Db2/db2u-instance-backup-restore-recipe.yaml), is a solid example. It is not a production blueprint. This repository is the recipe we ended up running after that example failed in a normal OpenShift layout: one operator project, one namespace per instance, and restores into a different environment.
+IBM’s [`db2u-instance-backup-restore-recipe.yaml`](https://github.com/IBM/storage-fusion/blob/master/backup-restore/recipes/Db2/db2u-instance-backup-restore-recipe.yaml) shows the mechanics correctly for a lab where the operator and the instance share a project. This repository is what we run instead on the layout OpenShift clusters actually use: one operator project, one namespace per instance.
 
-Deploy and test steps are in [docs/end-to-end.md](docs/end-to-end.md).
+Step-by-step deploy, backup, and restore is in [docs/end-to-end.md](docs/end-to-end.md).
 
-![Parent and child recipe](docs/images/architecture.svg)
+## Who this is for
 
-![Transform on restore](docs/images/transform.svg)
+Platform and database engineers who followed the official recipe, got a Backup object, and then found the backup had not run. Or who restored into a new project and got an instance that still looked like production.
 
-![Failure undo](docs/images/failover.svg)
+## The layout the sample does not cover
 
-![Deploy order](docs/images/deploy.svg)
+The operator lives in a namespace such as `db2-operator`. Each database is a `Db2uInstance` in its own project. That split is how you keep RBAC, tenancy, and upgrades apart. It is the normal pattern.
 
-## Why this exists
-
-Fusion is the natural way to protect Db2 on OpenShift. The official recipe shows the mechanics: pause reconcile, `manage_snapshots` suspend, snapshot volumes, resume. Follow it in a lab where the operator and the instance live in the same namespace and it works.
-
-Production clusters are not built that way. The operator sits in a dedicated namespace such as `db2-operator`. Each database is a `Db2uInstance` in its own project. That split is how you isolate RBAC, tenancy, and upgrades. It is the common pattern, not an edge case.
-
-The sample looks for the operator manager with `control-plane=db2u-operator-manager` **in the instance namespace**:
+The sample searches for `control-plane=db2u-operator-manager` in the **instance** namespace:
 
 ```yaml
 namespace: ${GROUP.db2u-volumes.namespace}
 ```
 
-The pod is not there. These hooks never run:
+The manager pod is not there, so these hooks never run:
 
 - `db2u-operator-manager-exec/maintenance-mode-on`
 - `db2u-operator-manager-exec/engine-maintenance-mode-on`
 
-The Backup object is created. The backup does not. Logs show the hook could not find the manager pod. Without maintenance mode, you do not get a consistent snapshot.
+Fusion still creates the Backup. The database is never placed in maintenance mode, and the snapshot is not taken. The failure is in the hook log, not in the Backup’s existence.
 
-IBM’s own Db2 recipe README states the other limit directly: restore to the **same** namespace only. A backup you cannot place in another project is not a service-protection strategy. Promoting prod into QA, rebuilding a namespace, or recovering onto a spoke all require a different target namespace, rewritten affinity and labels, and a Project display name that is not the source environment’s name.
+The same README also limits restore to the **same** namespace. Promoting prod to QA, rebuilding a project, or recovering onto a spoke all need a different target, rewritten affinity and labels, and a Project display name that belongs to that target.
 
-This pack is that missing layer. Fusion stays the engine. The recipe is what makes Db2u protection match the cluster you actually run.
+The parent recipe owns the operator hooks. The child owns the instance. A PolicyAssignment names only the parent. Fusion finds the child from its labels.
 
-## What we had to add
+![Parent recipe calls the child. Operator hooks stay in db2-operator. The instance namespace is the only thing backed up.](docs/images/architecture.svg)
 
-| Gap in the sample | What this pack does |
-|-------------------|---------------------|
+## What changed from the sample
+
+| Gap in the sample | What this repository does |
+|-------------------|---------------------------|
 | Operator hooks run in the instance namespace | Parent hooks target `db2-operator` |
-| Operator, subscriptions, and the database are one backup | Instance namespace only. The operator is not backed up with the data |
+| Operator, subscriptions, and the database are one backup | The Application includes the instance namespace only |
 | Exclude-list, then copy everything else | Allow-list: volumes, configmaps, secrets, `Db2uInstance` |
-| No undo if snapshot fails after suspend | `inverseOp` resumes I/O and clears maintenance |
-| Same-namespace restore only | Transform + `namespaceMapping` + Restore example |
-| Target Project keeps the source display name | `set-display-name` from the target suffix: `db2u-qa` → `Db2 Warehouse (QA)` |
-| One flat recipe | Fusion 2.10 parent/child recipe. PolicyAssignment names the parent only |
-| Readiness is `state == Ready` | Instance check also requires `FormationStatus == OK` |
+| No undo if the snapshot fails after suspend | `inverseOp` resumes I/O and clears maintenance |
+| Same-namespace restore only | Transform, `namespaceMapping`, and a Restore example |
+| Target Project keeps the source display name | `set-display-name` uses the target suffix: `db2u-qa` becomes `Db2 Warehouse (QA)` |
+| One flat recipe | Fusion 2.10 parent/child. The assignment names the parent |
+| Readiness is only `state == Ready` | The instance check also requires `FormationStatus == OK` |
 | Nothing marks a restored database | Annotation `db2u.fusion/restored=true` |
 
-Two scripts from IBM’s folder are still required, narrowed to `Db2uInstance`:
+Two scripts from IBM’s folder are still required, and they are limited to `Db2uInstance`:
 
-- `scripts/backup-pre-req.sh` labels `for-backup=true`. The readiness check selects on that label. Without it, restore waits until timeout.
-- `scripts/restore-pre-req.sh` grants Fusion’s transaction-manager `get`, `list`, and `patch` on `db2uinstances` and `db2uengines`. Restore hooks fail with a permission error on a spoke if this is missing. `patch` is what the restored annotation needs.
+- [`scripts/backup-pre-req.sh`](scripts/backup-pre-req.sh) sets `for-backup=true`. The readiness check selects on that label. Without it, restore waits until timeout.
+- [`scripts/restore-pre-req.sh`](scripts/restore-pre-req.sh) grants Fusion’s transaction-manager `get`, `list`, and `patch` on `db2uinstances` and `db2uengines`. A spoke restore fails with a permission error if this is missing. `patch` is what the restored annotation needs.
 
-## Credentials and the 12.1.4 plugin
+## How backup and restore run
 
-Backup and restore of files are not enough. On Db2 before 12.1.4, OADP restored the database files and left credentials and license configuration behind. The pod could start, the restore could look successful, and the instance still could not operate. The usual symptom was a default trial license instead of the enterprise license, because the `db2-lic` material was not preserved.
-
-Db2 **12.1.4** added `db2u-velero-plugin` so a restored deployment keeps credentials and configuration. That change came out of this gap being reported. Install the plugin on the Fusion `DataProtectionApplication` using IBM’s Software Hub steps, not a digest copied into git:
-
-[Fusion backup and restore utility](https://www.ibm.com/docs/en/software-hub/5.4.x?topic=utilities-fusion-backup-restore-utility)
-
-A Ready pod with a trial license is a failed restore. Confirm the license after every cross-namespace test.
-
-On releases older than 12.1.4 the practical bridge was to place the enterprise license in `db2-lic` before backup so the restored files already contained it. Prefer the plugin. Do not stay on the workaround once you can move to 12.1.4.
-
-## Restore is not backup run backwards
-
-A backup from namespace A, taken while the instance lived in that project, does not apply unchanged in namespace C.
-
-- Node affinity still says prod.
-- Labels still name the source environment.
-- The OpenShift Project `openshift.io/display-name` is the source name, so the console shows the backup’s environment on the target.
-- Secrets and config that embed the old namespace are stale.
-
-IBM’s sample does not ship a Transform. Most failed restores we hit were here, including instances that came back and then sat in maintenance shutdown because operator and namespace references were still the source values.
-
-This pack restores with three pieces:
-
-1. `namespaceMapping` on the Restore (`db2u-prod` → `db2u-qa` in the example).
-2. A Transform you edit to match your `Db2uInstance` affinity and labels.
-3. `set-display-name` on the target namespace. The label is `Db2 Warehouse (<SUFFIX>)`, where the suffix is the segment after the last `-`, uppercased. `dw-stg` becomes `Db2 Warehouse (STG)`.
-
-Create the target project before the Restore. The display-name hook patches that namespace first.
-
-## Quiesce, and undoing it
-
-Consistent backups need the database quiesced and the operator told not to reconcile mid-snapshot.
-
-Backup order:
-
-1. Pause `Db2uInstance` reconcile.
-2. Pause `Db2uEngine` reconcile.
-3. Child recipe: configmaps and secrets, the `Db2uInstance`, `manage_snapshots suspend`, volume snapshot, `manage_snapshots resume`.
-4. Clear both maintenance annotations.
-
-`manage_snapshots` runs inside container `db2u` on pod `dashmpp-head-0`. Maintenance patches run inside the operator manager, using that pod’s service account. Those are exec hooks on purpose. A Job hook starts a different pod, with a different image and identity, and cannot see `manage_snapshots` or the operator token.
-
-If the volume snapshot fails after suspend, Fusion runs `inverseOp` and resumes I/O. The same pairing clears maintenance if a later step fails. Without that, a failed backup leaves the database locked. The pattern is the one in IBM’s [undo an operation](https://community.ibm.com/community/user/blogs/sandeep-prajapati/2024/04/05/fusion-recipe-tips-how-to-undo-an-operation-in-cas) note.
-
-Assign `db2u-parent-recipe` on the PolicyAssignment **before the first backup**. A backup taken with no recipe has no quiesce and no resource order. You cannot invent that on restore. See [I didn’t use a recipe on backup](https://community.ibm.com/community/user/blogs/jim-smith/2024/03/13/fusion-recipe-tips-no-backup-recipe).
-
-## Parent and child
-
-Fusion 2.10 can build one workflow from a parent recipe plus child recipes. That matches this layout: the parent owns operator orchestration, the child owns one instance.
+Fusion 2.10 builds one workflow from a parent plus a child. The parent does not name the instance namespace. Hooks use `${GROUP.db2u-volumes.namespace}`, which follows `namespaceMapping` on restore.
 
 ```
-db2u-parent-recipe
-  backup:  maintenance on → engine maintenance on → instance-backup → maintenance off
-  restore: set-display-name → instance-restore → sleep 300s → maintenance off
+backup:  maintenance on → engine maintenance on → instance-backup → maintenance off
+restore: set-display-name → instance-restore → sleep 300s → maintenance off
 
-db2u-instance-child-recipe
-  instance-backup:  resources → Db2uInstance → suspend → volumes → resume
-  instance-restore: volumes → resources → Db2uInstance → engine Ready
-                    → manage_snapshots restore → resume → instance Ready
-                    → annotate db2u.fusion/restored=true
+instance-backup:  resources → Db2uInstance → suspend → volumes → resume
+instance-restore: volumes → resources → Db2uInstance → engine Ready
+                  → snapshot restore → resume → instance Ready
+                  → annotate db2u.fusion/restored=true
 ```
 
-The child is discovered by labels, not by a name on the Restore:
+The child carries:
 
 ```yaml
 dp.isf.ibm.com/parent-recipe: db2u-parent-recipe
 dp.isf.ibm.com/parent-recipe-namespace: ibm-spectrum-fusion-ns
 ```
 
-The instance namespace comes from `${GROUP.db2u-volumes.namespace}` after `namespaceMapping`. Nothing in the recipe hardcodes an application name.
+Groups use `includedResourceTypes`. The sample uses an exclude list and then backs up whatever remains, which pulls operator and OLM objects into the backup when they share the namespace. An allow-list leaves a new type out until you add it. Run [`scripts/discover-instance-resources.sh`](scripts/discover-instance-resources.sh) against a real instance namespace before you widen the list.
 
-Groups use `includedResourceTypes`. IBM’s sample uses an exclude list and then backs up whatever remains, which pulls in operator and OLM objects when they share the namespace. An allow-list leaves a new resource type out until you add it. Run `scripts/discover-instance-resources.sh` against a real instance namespace before you widen that list.
+`manage_snapshots` runs in container `db2u` on pod `dashmpp-head-0`. Maintenance patches run in the operator manager, using that pod’s service account. Those stay exec hooks. A Job hook starts another pod, with another image and identity, and cannot see the binary or the token.
+
+Assign `db2u-parent-recipe` on the PolicyAssignment **before the first backup**. A backup taken with no recipe has no quiesce and no resource order, and a later restore cannot invent them. See [I didn’t use a recipe on backup](https://community.ibm.com/community/user/blogs/jim-smith/2024/03/13/fusion-recipe-tips-no-backup-recipe).
+
+## Restoring into another namespace
+
+A backup taken in namespace A does not apply unchanged in namespace C. Affinity still says prod. Labels still name the source environment. The OpenShift Project keeps the source `openshift.io/display-name`, so the console shows the backed-up environment on the target. The sample ships no Transform. Restores failed here more often than they failed in the backup hooks, including instances that returned and then sat in maintenance shutdown because those references were still the source values.
+
+Three things have to move together:
+
+1. `namespaceMapping` on the Restore (`db2u-prod` to `db2u-qa` in the example).
+2. A Transform whose JSON paths match your `Db2uInstance`. The example is a starting point, not a schema for every cluster.
+3. `set-display-name` on the target project. The text is `Db2 Warehouse (<SUFFIX>)`. The suffix is the segment after the last `-`, in upper case. `dw-stg` becomes `Db2 Warehouse (STG)`.
+
+Create the target project before you apply the Restore. The display-name hook patches that namespace first.
+
+![Source namespace, namespace mapping, JSON patch, and the target project display name.](docs/images/transform.svg)
+
+Files on disk are not a working instance. Before Db2 12.1.4, OADP restored the database and left credentials and license configuration behind. The pod could start, the restore could look successful, and the instance still could not operate. The usual sign was a trial license, because `db2-lic` had not been preserved.
+
+Db2 **12.1.4** added `db2u-velero-plugin` for that. Reporting the gap is part of why the plugin exists. Install it on the Fusion DataProtectionApplication with IBM’s current image, not a digest copied into git: [Fusion backup and restore utility](https://www.ibm.com/docs/en/software-hub/5.4.x?topic=utilities-fusion-backup-restore-utility). Confirm the enterprise license after every cross-namespace test. A Ready pod on a trial license is a failed restore.
+
+On releases older than 12.1.4, the bridge was to put the enterprise license in `db2-lic` before backup so the restored files already contained it. Move to 12.1.4 and the plugin when you can.
+
+## If the snapshot fails
+
+Quiesce is what makes the copy consistent, and it is also how a failed backup takes the database out of service. Suspend and both maintenance-on steps name an `inverseOp`. If the volume snapshot fails, Fusion runs those undos in reverse: resume I/O, then clear engine maintenance, then clear instance maintenance.
+
+![inverseOp resumes the database and clears maintenance when the volume snapshot fails.](docs/images/failover.svg)
+
+That path puts the **source** database back into service. It is not a failover to another site. Recovery into another namespace is the Restore in the previous section. The pattern is IBM’s [undo an operation](https://community.ibm.com/community/user/blogs/sandeep-prajapati/2024/04/05/fusion-recipe-tips-how-to-undo-an-operation-in-cas) note.
 
 ## Slow restores and timeouts
 
-The sample never mentions how long Db2 recovery takes. Crash recovery, log replay, and rollback are heavy on CPU, memory, and disk. An undersized pod, a slow storage class, or a pod eviction stretches a restore for hours. Fusion will report the recipe step finished while the database is still recovering, or the Restore will hit its timeout.
+The sample does not say how long Db2 recovery takes. Crash recovery, log replay, and rollback are heavy on CPU, memory, and disk. An undersized pod, a slow storage class, or an eviction can stretch a restore for hours. Fusion may report the recipe step complete while the database is still recovering, or the Restore may hit its timeout.
 
-Size the target for recovery, not for steady state. Watch pod CPU, memory, and volume latency while `manage_snapshots restore` and the readiness checks run. Raise the Restore timeout and the check timeouts to match a measured run in your cluster. A timeout you cancel is safer than one you discover afterwards.
+Size the target for recovery, not for steady state. Watch pod CPU, memory, and volume latency while `manage_snapshots restore` and the readiness checks run. Set the Restore timeout from a measured run in your cluster. Cancel a stuck restore before the timeout fires.
 
-While implementing this we also saw a Restore timeout followed by deletion of the **target** namespace, not a clean partial apply. Treat a long or timed-out restore as a data-loss risk:
+While implementing this we also saw a Restore timeout followed by deletion of the **target** namespace, rather than a partial apply left in place. Treat that as a data-loss risk:
 
 - Measure restore time before you depend on it.
 - Set the timeout above that measurement.
-- Watch the Restore and cancel it before the timeout if it is stuck.
-- If a target namespace disappears, check the Restore status and the audit log before you assume someone deleted the project.
+- If a target namespace disappears, read the Restore status and the audit log before you assume a person deleted the project.
 
-## What you need
+## Put it on a cluster
 
-- IBM Fusion Backup & Restore **2.10+**
-- Db2u operator in its own namespace (default in the recipe: `db2-operator`)
-- A `Db2uInstance` in a separate namespace, Db2 **12.1.4+**
-- `db2u-velero-plugin` on the Fusion DataProtectionApplication
-- `oc` and `jq` on the workstation
+You need Fusion Backup & Restore **2.10 or newer**, a Db2u operator in its own namespace, a `Db2uInstance` on Db2 **12.1.4 or newer**, the Velero plugin on the Fusion DataProtectionApplication, and `oc` and `jq` on the workstation.
 
-The Application includes the instance namespace only.
-
-## Layout
-
-| Path | Role |
-|------|------|
-| [docs/end-to-end.md](docs/end-to-end.md) | Deploy, back up, restore into a new namespace, and what to check |
-| [docs/images/](docs/images/) | Architecture, transform, failure undo, and deploy-order diagrams |
-| [recipe/db2u-parent-recipe.yaml](recipe/db2u-parent-recipe.yaml) | Operator hooks, display name, backup and restore order |
-| [recipe/db2u-instance-child-recipe.yaml](recipe/db2u-instance-child-recipe.yaml) | Volumes, secrets, instance CR, quiesce, readiness, restored annotation |
-| [scripts/](scripts/) | Label, ClusterRole, and resource-discovery helpers |
-| [examples/](examples/) | Transform, Restore, and Velero plugin reminder. Edit before apply |
+![Order of operations from the plugin through a cross-namespace restore.](docs/images/deploy.svg)
 
 ```bash
 ./scripts/restore-pre-req.sh
@@ -177,13 +137,21 @@ oc apply -f recipe/db2u-instance-child-recipe.yaml
 ./scripts/backup-pre-req.sh <DB2U_INSTANCE_NAMESPACE>
 ```
 
-Then wire a PolicyAssignment at `db2u-parent-recipe` and follow [docs/end-to-end.md](docs/end-to-end.md) for the backup and the cross-namespace restore.
+Point the PolicyAssignment at `db2u-parent-recipe`, then follow [docs/end-to-end.md](docs/end-to-end.md) for the backup and the restore into a new namespace. Edit the files in [`examples/`](examples/) before you apply them. The Velero file there is a reminder, not a DataProtectionApplication.
+
+| Path | Role |
+|------|------|
+| [docs/end-to-end.md](docs/end-to-end.md) | Deploy, backup, restore, and what to check |
+| [recipe/db2u-parent-recipe.yaml](recipe/db2u-parent-recipe.yaml) | Operator hooks, display name, workflow order |
+| [recipe/db2u-instance-child-recipe.yaml](recipe/db2u-instance-child-recipe.yaml) | Volumes, secrets, instance, quiesce, readiness |
+| [scripts/](scripts/) | Label, ClusterRole, and resource discovery |
+| [examples/](examples/) | Transform, Restore, and plugin reminder |
 
 ## Out of scope
 
-- `Db2uCluster` recipes
+- `Db2uCluster`
 - Backing up the operator, OLM subscriptions, or cluster-scoped objects
-- Job hooks and parallel child workflows. Parallel execution only helps when several instances share one Application and every parallel sequence is hooks-only. A volume group forces sequential execution.
+- Job hooks, and parallel children. Parallel execution only helps when one Application covers several instances and every parallel sequence is hooks only. A volume group forces sequential execution.
 - Storage credentials and backup-location secrets
 
 ## Further reading
