@@ -1,0 +1,13 @@
+.DS_Store
+
+# Local environment manifests (internal hostnames, licenses, credentials).
+# The public repo is the generic recipe pack only.
+/*
+!README.md
+!docs/
+!community/
+!.gitignore
+
+# Never publish backup credentials, even if copied into an allowed path.
+**/*backup-secret*
+**/*credentials*

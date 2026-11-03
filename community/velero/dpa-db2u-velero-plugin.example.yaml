@@ -1,0 +1,26 @@
+---
+# Example fragment only — do NOT apply this file as a full DataProtectionApplication.
+#
+# We installed / configured the Db2u Velero plugin using the IBM Software Hub
+# Fusion backup & restore utility guidance:
+#   https://www.ibm.com/docs/en/software-hub/5.4.x?topic=utilities-fusion-backup-restore-utility
+#
+# Why: without this plugin, OADP/Velero restores Db2 volumes but may not
+# preserve credentials and license configuration. The instance looks restored
+# but is not usable. Db2 12.1.4+ + db2u-velero-plugin fixes that.
+#
+# Always take the current image/tag from IBM’s docs (example default from
+# cpd-cli oadp install: icr.io/db2u/db2u-velero-plugin:5.4.0).
+#
+# Typical outcome on the Fusion-managed DPA (ibm-backup-restore / velero):
+#
+# spec:
+#   configuration:
+#     velero:
+#       customPlugins:
+#         - name: db2u-velero-plugin
+#           image: icr.io/db2u/db2u-velero-plugin:<VERSION>
+#
+# Verify:
+#   oc get dpa velero -n ibm-backup-restore \
+#     -o jsonpath='{.spec.configuration.velero.customPlugins}' ; echo
