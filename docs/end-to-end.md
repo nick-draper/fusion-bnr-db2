@@ -1,6 +1,6 @@
 # Db2u Fusion Backup & Restore — end to end
 
-This guide is the deploy and test procedure for the community recipe pack in [`community/`](../community/).
+This guide is the deploy and test procedure for the recipes in this repository.
 
 It assumes a production layout:
 
@@ -9,7 +9,7 @@ It assumes a production layout:
 - you back up the instance, not the operator
 - restore into a **different** namespace is a normal operation
 
-The YAML at the repository root (`backup-policy/`, `recipe/`, `project/`, and so on) is an environment-specific working set. Use this guide and `community/` for a generic deployment.
+There is one README. This file is the procedure. Diagrams live in [`images/`](images/).
 
 Placeholders used below. Replace them with your names.
 
@@ -50,6 +50,8 @@ If the volume snapshot fails after suspend or maintenance-on, `inverseOp` runs t
 3. Sleep 300 seconds so controllers settle.
 4. Clear maintenance annotations if they were restored with the CR.
 
+![Parent and child](images/architecture.svg)
+
 The child is not named on the `PolicyAssignment` or `Restore`. Fusion finds it by:
 
 ```yaml
@@ -86,7 +88,7 @@ oc get dpa velero -n ibm-backup-restore \
   -o jsonpath='{.spec.configuration.velero.customPlugins}' ; echo
 ```
 
-You should see `db2u-velero-plugin` (image such as `icr.io/db2u/db2u-velero-plugin:<version>` from the current IBM docs). See [`community/velero/dpa-db2u-velero-plugin.example.yaml`](../community/velero/dpa-db2u-velero-plugin.example.yaml). Do not apply that file; it is a reminder, not a full DPA.
+You should see `db2u-velero-plugin` (image such as `icr.io/db2u/db2u-velero-plugin:<version>` from the current IBM docs). See [`examples/dpa-db2u-velero-plugin.example.yaml`](../examples/dpa-db2u-velero-plugin.example.yaml). Do not apply that file; it is a reminder, not a full DPA.
 
 **Object storage**
 
@@ -98,10 +100,9 @@ A Fusion backup storage location (S3-compatible) and a backup policy already con
 
 ## 3. One-time cluster setup
 
-From `community/`:
+![Deploy order](images/deploy.svg)
 
 ```bash
-cd community
 ./scripts/restore-pre-req.sh
 ```
 
@@ -249,13 +250,15 @@ Nodes that should run the restored database need the affinity value your Transfo
 
 Copy the examples and edit them. Do not apply the placeholders as-is.
 
-**Transform** — [`community/transform/db2u-transform-prod-to-qa.example.yaml`](../community/transform/db2u-transform-prod-to-qa.example.yaml)
+![Transform](images/transform.svg)
+
+**Transform** — [`examples/db2u-transform-prod-to-qa.example.yaml`](../examples/db2u-transform-prod-to-qa.example.yaml)
 
 - Set `resourceNameRegex` to the source instance name (`my-db2`), or the regex will not match and affinity/labels stay as backed up.
 - Point JSON paths at fields that exist on **your** `Db2uInstance`. The example path updates node affinity environment and `app.kubernetes.io/environment`. `/` in a label key is `~1` in a JSON Pointer.
 - PVC label updates are best-effort. Remove a patch whose path is absent, or that resource fails the transform.
 
-**Restore** — [`community/restore/db2u-restore-cross-namespace.example.yaml`](../community/restore/db2u-restore-cross-namespace.example.yaml)
+**Restore** — [`examples/db2u-restore-cross-namespace.example.yaml`](../examples/db2u-restore-cross-namespace.example.yaml)
 
 - `metadata.name`: unique, for example `db2u-restore-prod-to-qa-test1`
 - `spec.backup`: the exact Backup name from step 7
@@ -264,8 +267,8 @@ Copy the examples and edit them. Do not apply the placeholders as-is.
 - `spec.transform`: the Transform name you applied
 
 ```bash
-oc apply -f transform/db2u-transform-prod-to-qa.example.yaml
-oc apply -f restore/db2u-restore-cross-namespace.example.yaml
+oc apply -f examples/db2u-transform-prod-to-qa.example.yaml
+oc apply -f examples/db2u-restore-cross-namespace.example.yaml
 ```
 
 Applying the Restore starts the job.
@@ -337,6 +340,10 @@ Change the `Db2 Warehouse` prefix in the parent recipe if the product name diffe
 
 ## 12. When something fails
 
+![Failure undo](images/failover.svg)
+
+If a backup fails after suspend, `inverseOp` should resume I/O and clear maintenance. Confirm the annotation is gone before you run another backup. A Restore into another namespace is a separate action. It is not what `inverseOp` does.
+
 | Symptom | What to check |
 |---------|----------------|
 | Hook cannot find operator manager | Pod label `control-plane=db2u-operator-manager` in `db2-operator`. Parent hook namespace. |
@@ -367,11 +374,15 @@ Fusion hook logs are on the backup/restore job pods in the Fusion namespaces (`i
 
 | Path | Role in this procedure |
 |------|------------------------|
-| `community/recipe/db2u-parent-recipe.yaml` | Operator hooks, display name, backup/restore order |
-| `community/recipe/db2u-instance-child-recipe.yaml` | Volumes, secrets, instance CR, quiesce, readiness, restored annotation |
-| `community/scripts/backup-pre-req.sh` | `for-backup=true` |
-| `community/scripts/restore-pre-req.sh` | ClusterRole for Db2u get/list/patch |
-| `community/scripts/discover-instance-resources.sh` | Inventory before changing the allow-list |
-| `community/transform/db2u-transform-prod-to-qa.example.yaml` | Edit, then apply |
-| `community/restore/db2u-restore-cross-namespace.example.yaml` | Edit, then apply |
-| `community/velero/dpa-db2u-velero-plugin.example.yaml` | Plugin reminder only |
+| `recipe/db2u-parent-recipe.yaml` | Operator hooks, display name, backup/restore order |
+| `recipe/db2u-instance-child-recipe.yaml` | Volumes, secrets, instance CR, quiesce, readiness, restored annotation |
+| `scripts/backup-pre-req.sh` | `for-backup=true` |
+| `scripts/restore-pre-req.sh` | ClusterRole for Db2u get/list/patch |
+| `scripts/discover-instance-resources.sh` | Inventory before changing the allow-list |
+| `examples/db2u-transform-prod-to-qa.example.yaml` | Edit, then apply |
+| `examples/db2u-restore-cross-namespace.example.yaml` | Edit, then apply |
+| `examples/dpa-db2u-velero-plugin.example.yaml` | Plugin reminder only |
+| `docs/images/architecture.svg` | Parent, child, and the two namespaces |
+| `docs/images/transform.svg` | Cross-namespace restore |
+| `docs/images/failover.svg` | `inverseOp` if the snapshot fails |
+| `docs/images/deploy.svg` | Order of operations |

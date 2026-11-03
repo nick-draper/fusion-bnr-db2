@@ -17,6 +17,8 @@ Deploy and test steps are in [docs/end-to-end.md](docs/end-to-end.md).
 
 ![Failure undo](docs/images/failover.svg)
 
+![Deploy order](docs/images/deploy.svg)
+
 ## Why this exists
 
 Fusion is the natural way to protect Db2 on OpenShift. The official recipe shows the mechanics: pause reconcile, `manage_snapshots` suspend, snapshot volumes, resume. Follow it in a lab where the operator and the instance live in the same namespace and it works.
@@ -56,8 +58,8 @@ This pack is that missing layer. Fusion stays the engine. The recipe is what mak
 
 Two scripts from IBM’s folder are still required, narrowed to `Db2uInstance`:
 
-- `community/scripts/backup-pre-req.sh` labels `for-backup=true`. The readiness check selects on that label. Without it, restore waits until timeout.
-- `community/scripts/restore-pre-req.sh` grants Fusion’s transaction-manager `get`, `list`, and `patch` on `db2uinstances` and `db2uengines`. Restore hooks fail with a permission error on a spoke if this is missing. `patch` is what the restored annotation needs.
+- `scripts/backup-pre-req.sh` labels `for-backup=true`. The readiness check selects on that label. Without it, restore waits until timeout.
+- `scripts/restore-pre-req.sh` grants Fusion’s transaction-manager `get`, `list`, and `patch` on `db2uinstances` and `db2uengines`. Restore hooks fail with a permission error on a spoke if this is missing. `patch` is what the restored annotation needs.
 
 ## Credentials and the 12.1.4 plugin
 
@@ -132,7 +134,7 @@ dp.isf.ibm.com/parent-recipe-namespace: ibm-spectrum-fusion-ns
 
 The instance namespace comes from `${GROUP.db2u-volumes.namespace}` after `namespaceMapping`. Nothing in the recipe hardcodes an application name.
 
-Groups use `includedResourceTypes`. IBM’s sample uses an exclude list and then backs up whatever remains, which pulls in operator and OLM objects when they share the namespace. An allow-list leaves a new resource type out until you add it. Run `community/scripts/discover-instance-resources.sh` against a real instance namespace before you widen that list.
+Groups use `includedResourceTypes`. IBM’s sample uses an exclude list and then backs up whatever remains, which pulls in operator and OLM objects when they share the namespace. An allow-list leaves a new resource type out until you add it. Run `scripts/discover-instance-resources.sh` against a real instance namespace before you widen that list.
 
 ## Slow restores and timeouts
 
@@ -162,15 +164,13 @@ The Application includes the instance namespace only.
 | Path | Role |
 |------|------|
 | [docs/end-to-end.md](docs/end-to-end.md) | Deploy, back up, restore into a new namespace, and what to check |
-| [community/recipe/db2u-parent-recipe.yaml](community/recipe/db2u-parent-recipe.yaml) | Operator hooks, display name, backup and restore order |
-| [community/recipe/db2u-instance-child-recipe.yaml](community/recipe/db2u-instance-child-recipe.yaml) | Volumes, secrets, instance CR, quiesce, readiness, restored annotation |
-| [community/scripts/](community/scripts/) | Label, ClusterRole, and resource-discovery helpers |
-| [community/transform/](community/transform/) | Example prod → qa JSON patches. Edit before apply |
-| [community/restore/](community/restore/) | Example Restore. Edit the backup name and namespace map |
-| [community/velero/](community/velero/) | Reminder for the Velero plugin. Not a DataProtectionApplication to apply |
+| [docs/images/](docs/images/) | Architecture, transform, failure undo, and deploy-order diagrams |
+| [recipe/db2u-parent-recipe.yaml](recipe/db2u-parent-recipe.yaml) | Operator hooks, display name, backup and restore order |
+| [recipe/db2u-instance-child-recipe.yaml](recipe/db2u-instance-child-recipe.yaml) | Volumes, secrets, instance CR, quiesce, readiness, restored annotation |
+| [scripts/](scripts/) | Label, ClusterRole, and resource-discovery helpers |
+| [examples/](examples/) | Transform, Restore, and Velero plugin reminder. Edit before apply |
 
 ```bash
-cd community
 ./scripts/restore-pre-req.sh
 oc apply -f recipe/db2u-parent-recipe.yaml
 oc apply -f recipe/db2u-instance-child-recipe.yaml
