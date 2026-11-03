@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-labelledby="trTitle trDesc">
+  <title id="trTitle">Cross-namespace restore and transform</title>
+  <desc id="trDesc">A backup from the source namespace is restored into a new namespace. The Transform rewrites affinity and labels. The recipe sets the Project display name from the target suffix.</desc>
+  <style>
+    .bg { fill: #f4f7fb; }
+    .card { fill: #ffffff; stroke: #d0d7e2; stroke-width: 1.5; }
+    .title { font: 600 22px system-ui, Segoe UI, sans-serif; fill: #161616; }
+    .sub { font: 400 13px system-ui, Segoe UI, sans-serif; fill: #525252; }
+    .h { font: 600 15px system-ui, Segoe UI, sans-serif; fill: #161616; }
+    .b { font: 400 13px system-ui, Segoe UI, sans-serif; fill: #161616; }
+    .m { font: 500 12px system-ui, Segoe UI, sans-serif; fill: #525252; }
+    .chip { font: 600 11px system-ui, Segoe UI, sans-serif; }
+  </style>
+  <rect class="bg" width="1200" height="560" rx="16"/>
+  <text class="title" x="40" y="48">Transform on restore</text>
+  <text class="sub" x="40" y="72">Restore is not the backup played backwards. Source names and affinity stay stale unless you rewrite them.</text>
+
+  <rect class="card" x="32" y="108" width="250" height="300" rx="14"/>
+  <text class="chip" x="52" y="140" fill="#0f62fe">SOURCE</text>
+  <text class="h" x="52" y="168">db2u-prod</text>
+  <text class="b" x="52" y="204">Db2uInstance</text>
+  <text class="b" x="52" y="228">affinity: prod</text>
+  <text class="b" x="52" y="252">environment: prod</text>
+  <text class="b" x="52" y="276">display name: prod</text>
+  <text class="m" x="52" y="320">Backed up with the parent recipe</text>
+  <text class="m" x="52" y="342">Volumes, secrets, instance CR</text>
+
+  <rect class="card" x="330" y="108" width="250" height="300" rx="14"/>
+  <text class="chip" x="350" y="140" fill="#8a3ffc">FUSION OBJECTS</text>
+  <text class="h" x="350" y="168">Backup</text>
+  <text class="b" x="350" y="204">namespaceMapping</text>
+  <text class="b" x="350" y="228">db2u-prod ’ db2u-qa</text>
+  <text class="b" x="350" y="264">recipe: parent only</text>
+  <text class="b" x="350" y="300">transform: prod-to-qa</text>
+  <text class="m" x="350" y="360">Child is discovered, not named</text>
+
+  <rect class="card" x="628" y="108" width="250" height="300" rx="14"/>
+  <text class="chip" x="648" y="140" fill="#8a3ffc">JSON PATCH</text>
+  <text class="h" x="648" y="168">Transform</text>
+  <text class="b" x="648" y="204">Db2uInstance name match</text>
+  <text class="b" x="648" y="228">affinity value ’ qa</text>
+  <text class="b" x="648" y="252">environment label ’ qa</text>
+  <text class="b" x="648" y="276">PVC labels ’ qa</text>
+  <text class="m" x="648" y="320">Edit paths to match your CR</text>
+  <text class="m" x="648" y="342">Allow-list still applies</text>
+
+  <rect x="926" y="108" width="242" height="300" rx="14" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+  <text class="chip" x="946" y="140" fill="#198038">TARGET</text>
+  <text class="h" x="946" y="168">db2u-qa</text>
+  <text class="b" x="946" y="204">Project display name</text>
+  <text class="b" x="946" y="228">Db2 Warehouse (QA)</text>
+  <text class="b" x="946" y="264">suffix after last hyphen</text>
+  <text class="b" x="946" y="288">qa, dev, stg, &</text>
+  <text class="b" x="946" y="324">annotation restored=true</text>
+  <text class="m" x="946" y="368">Create the project first</text>
+
+  <path d="M282 250 H330" stroke="#161616" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M580 250 H628" stroke="#161616" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M878 250 H926" stroke="#198038" stroke-width="2" fill="none" marker-end="url(#g)"/>
+
+  <rect class="card" x="32" y="432" width="1136" height="96" rx="14"/>
+  <text class="h" x="52" y="468">Also required outside the Transform</text>
+  <text class="b" x="52" y="496">db2u-velero-plugin on the DataProtectionApplication, or credentials and the enterprise license do not come back with the files.</text>
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#161616"/></marker>
+    <marker id="g" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#198038"/></marker>
+  </defs>
+</svg>

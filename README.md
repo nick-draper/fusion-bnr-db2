@@ -11,6 +11,12 @@ IBM’s sample, [`db2u-instance-backup-restore-recipe.yaml`](https://github.com/
 
 Deploy and test steps are in [docs/end-to-end.md](docs/end-to-end.md).
 
+![Parent and child recipe](docs/images/architecture.svg)
+
+![Transform on restore](docs/images/transform.svg)
+
+![Failure undo](docs/images/failover.svg)
+
 ## Why this exists
 
 Fusion is the natural way to protect Db2 on OpenShift. The official recipe shows the mechanics: pause reconcile, `manage_snapshots` suspend, snapshot volumes, resume. Follow it in a lab where the operator and the instance live in the same namespace and it works.
