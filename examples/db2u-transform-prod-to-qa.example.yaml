@@ -19,7 +19,7 @@ spec:
       subject:
         groupResource: db2uinstances.db2u.databases.ibm.com
         # Match the backed-up instance name (source)
-        resourceNameRegex: db2u-prod
+        resourceNameRegex: my-db2
       json:
         # Node affinity environment value (adjust path if your CR differs)
         - op: replace

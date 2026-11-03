@@ -92,7 +92,7 @@ You should see `db2u-velero-plugin` (image such as `icr.io/db2u/db2u-velero-plug
 
 **Object storage**
 
-A Fusion backup storage location (S3-compatible) and a backup policy already connected, or create them in the Fusion UI before step 5. This pack does not ship credentials.
+Examples under [`examples/`](../examples/) create the secret, storage location, and policy. The secret and the Db2 license ship as `REPLACE_WITH_` placeholders. Put your own values in before `scripts/configure-bnr.sh` will apply them.
 
 **Assign the recipe before the first backup.** A backup taken with no recipe has no quiesce and no resource order. You cannot add that later.
 
@@ -120,6 +120,8 @@ One Running pod in container `manager` is required. If the label differs, edit `
 
 ## 4. Install the recipes
 
+`scripts/configure-bnr.sh` in the next section applies these two files. Run the commands here when you already have the projects, secret, location, and policy, and you only need the recipes.
+
 ```bash
 oc apply -f recipe/db2u-parent-recipe.yaml
 oc apply -f recipe/db2u-instance-child-recipe.yaml
@@ -132,42 +134,54 @@ Expected: `db2u-instance-child-recipe` is listed.
 
 ---
 
-## 5. Register the instance as a Fusion application
+## 5. Configure Backup & Restore
 
-Include **only** the instance namespace. Do not include `db2-operator`. Backing up the operator with the database couples two lifecycles and matches a lab layout this pack does not use.
+Replace every `REPLACE_WITH_` value first.
+
+| File | You replace |
+|------|-------------|
+| `examples/backup-secret.example.yaml` | `REPLACE_WITH_ACCESS_KEY_ID`, `REPLACE_WITH_SECRET_ACCESS_KEY` |
+| `examples/backup-storage-location.example.yaml` | `REPLACE_WITH_S3_ENDPOINT`, `REPLACE_WITH_BUCKET_NAME` |
+| `examples/db2uinstance.example.yaml` | `REPLACE_WITH_DB2_LICENSE`, `REPLACE_WITH_STORAGE_CLASS` |
+
+The license value is the enterprise license text from IBM, not a trial key. Do not commit the filled-in files.
+
+`scripts/configure-bnr.sh` applies the objects in this order. It exits if a placeholder is still present.
+
+1. Projects `db2u-prod` and `db2u-qa`
+2. `Db2uInstance` `my-db2` in `db2u-prod`
+3. Secret `db2u-backup-secret`
+4. `BackupStorageLocation` `db2u-prod-backup-storage-location`
+5. `BackupPolicy` `db2u-prod-backup-policy` (04:00 Australia/Sydney, keep 5 days)
+6. Parent and child recipes
+7. `Application` `db2u-prod` (instance namespace only, not `db2-operator`)
+8. `PolicyAssignment` `db2u-prod-policy-assignment` with `runNow: false` and recipe `db2u-parent-recipe`
+9. Example Transform
+10. `restore-pre-req.sh` and `backup-pre-req.sh db2u-prod`
 
 ```bash
-oc apply -f - <<'EOF'
-apiVersion: application.isf.ibm.com/v1alpha1
-kind: Application
-metadata:
-  name: db2u-prod
-  namespace: ibm-spectrum-fusion-ns
-spec:
-  enableDR: false
-  includedNamespaces:
-    - db2u-prod
-EOF
+./scripts/configure-bnr.sh
 ```
 
-Create a backup policy in the Fusion UI (or reuse one) that points at your `BackupStorageLocation`. Then attach the parent recipe. If the assignment already exists:
+The same steps by hand:
 
 ```bash
-oc get policyassignment -n ibm-spectrum-fusion-ns
-
-oc patch policyassignment <ASSIGNMENT_NAME> -n ibm-spectrum-fusion-ns --type=merge -p '
-spec:
-  application: db2u-prod
-  backupPolicy: <POLICY_NAME>
-  recipe:
-    apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
-    kind: Recipe
-    name: db2u-parent-recipe
-    namespace: ibm-spectrum-fusion-ns
-'
+oc apply -f examples/namespace-db2u-prod.yaml
+oc apply -f examples/namespace-db2u-qa.yaml
+oc apply -f examples/db2uinstance.example.yaml
+oc apply -f examples/backup-secret.example.yaml
+oc apply -f examples/backup-storage-location.example.yaml
+oc apply -f examples/backup-policy.example.yaml
+oc apply -f recipe/db2u-parent-recipe.yaml
+oc apply -f recipe/db2u-instance-child-recipe.yaml
+oc apply -f examples/application.example.yaml
+oc apply -f examples/policy-assignment.example.yaml
+oc apply -f examples/db2u-transform-prod-to-qa.example.yaml
+./scripts/restore-pre-req.sh
+./scripts/backup-pre-req.sh db2u-prod
 ```
 
-Leave `runNow: false` until the label in the next step is in place.
+If the instance already exists, skip `db2uinstance.example.yaml` and label it with `backup-pre-req.sh` instead of applying a second CR.
 
 ---
 
@@ -192,7 +206,26 @@ Requires the [`oc get-resources`](https://github.com/Sandeep-Prajapati/kubectl-g
 
 ---
 
-## 7. Test a backup
+## 7. Prove the configuration
+
+```bash
+./scripts/test-bnr.sh preflight
+```
+
+That command fails unless all of the following are true:
+
+- `db2u-prod` and `db2u-qa` exist, and the operator manager pod is Running
+- Secret, storage location, policy, application, assignment, and both recipes exist
+- The live secret and `spec.license.value` do not still say `REPLACE_WITH_`
+- The application includes `db2u-prod` and does not include `db2-operator`
+- The assignment names `db2u-parent-recipe` and `runNow` is false
+- The child recipe label points at the parent
+- `my-db2` is `for-backup=true`, state `Ready`, and `dashmpp-head-0` is Running
+- The storage location phase is set and is not a failure
+
+Do not start a backup until preflight passes.
+
+## 8. Test a backup
 
 Confirm the instance is Ready:
 
@@ -227,12 +260,15 @@ Empty or absent means maintenance was cleared. If the backup failed midway, `inv
 Record the Backup object name. Restore needs that exact string:
 
 ```bash
+./scripts/test-bnr.sh backup
 oc get backup -n ibm-spectrum-fusion-ns
 ```
 
+`test-bnr.sh backup` passes only when the newest Backup phase is `Completed`, `Succeeded`, `Success`, or `Available`, and `maintenance-pause-reconcile` is gone from `my-db2`.
+
 ---
 
-## 8. Prepare the target namespace
+## 9. Prepare the target namespace
 
 Create the target project **before** restore. The first restore hook patches `openshift.io/display-name` on that namespace.
 
@@ -246,7 +282,7 @@ Nodes that should run the restored database need the affinity value your Transfo
 
 ---
 
-## 9. Edit the Transform and Restore
+## 10. Edit the Transform and Restore
 
 Copy the examples and edit them. Do not apply the placeholders as-is.
 
@@ -275,7 +311,7 @@ Applying the Restore starts the job.
 
 ---
 
-## 10. Watch the restore
+## 11. Watch the restore
 
 ```bash
 oc get restore -n ibm-spectrum-fusion-ns
@@ -322,9 +358,15 @@ Then validate the database itself (connect with your normal client, check a know
 
 Source `db2u-prod` should be unchanged and still Ready.
 
+```bash
+./scripts/test-bnr.sh restore
+```
+
+`test-bnr.sh restore` checks the QA display name, `db2u.fusion/restored=true`, and Ready on both the target and the source. It does not log in to Db2. Check the enterprise license yourself before you treat the restore as finished.
+
 ---
 
-## 11. Display name rules
+## 12. Display name rules
 
 `set-display-name` does not use a hardcoded environment list. It uppercases the segment after the final `-`:
 
@@ -338,7 +380,7 @@ Change the `Db2 Warehouse` prefix in the parent recipe if the product name diffe
 
 ---
 
-## 12. When something fails
+## 13. When something fails
 
 ![Failure undo](images/failover.svg)
 
@@ -361,7 +403,7 @@ Fusion hook logs are on the backup/restore job pods in the Fusion namespaces (`i
 
 ---
 
-## 13. What this test does not cover
+## 14. What this test does not cover
 
 - Backing up `db2-operator`, OLM subscriptions, or `Db2uCluster`.
 - Multiple instances in one Application (parallel child workflows). That needs a hooks-only sequence; a volume group forces sequential execution.
@@ -370,7 +412,7 @@ Fusion hook logs are on the backup/restore job pods in the Fusion namespaces (`i
 
 ---
 
-## 14. File map
+## 15. File map
 
 | Path | Role in this procedure |
 |------|------------------------|
@@ -379,9 +421,19 @@ Fusion hook logs are on the backup/restore job pods in the Fusion namespaces (`i
 | `scripts/backup-pre-req.sh` | `for-backup=true` |
 | `scripts/restore-pre-req.sh` | ClusterRole for Db2u get/list/patch |
 | `scripts/discover-instance-resources.sh` | Inventory before changing the allow-list |
+| `examples/namespace-db2u-prod.yaml` | Source project |
+| `examples/namespace-db2u-qa.yaml` | Target project |
+| `examples/db2uinstance.example.yaml` | Instance CR. Replace license and storage class |
+| `examples/backup-secret.example.yaml` | S3 keys. Replace both placeholders |
+| `examples/backup-storage-location.example.yaml` | Bucket and endpoint placeholders |
+| `examples/backup-policy.example.yaml` | Schedule and retention |
+| `examples/application.example.yaml` | Instance namespace only |
+| `examples/policy-assignment.example.yaml` | Application, policy, and parent recipe |
 | `examples/db2u-transform-prod-to-qa.example.yaml` | Edit, then apply |
-| `examples/db2u-restore-cross-namespace.example.yaml` | Edit, then apply |
+| `examples/db2u-restore-cross-namespace.example.yaml` | Edit the backup name, then apply |
 | `examples/dpa-db2u-velero-plugin.example.yaml` | Plugin reminder only |
+| `scripts/configure-bnr.sh` | Apply the objects above after placeholders are replaced |
+| `scripts/test-bnr.sh` | `preflight`, `backup`, and `restore` checks |
 | `docs/images/architecture.svg` | Parent, child, and the two namespaces |
 | `docs/images/transform.svg` | Cross-namespace restore |
 | `docs/images/failover.svg` | `inverseOp` if the snapshot fails |

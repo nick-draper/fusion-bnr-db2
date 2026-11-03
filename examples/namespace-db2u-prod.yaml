@@ -1,0 +1,8 @@
+---
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: db2u-prod
+  annotations:
+    openshift.io/display-name: Db2 Warehouse (PROD)
+    openshift.io/description: Source namespace for the Db2uInstance backup

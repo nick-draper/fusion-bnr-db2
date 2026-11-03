@@ -1,0 +1,59 @@
+---
+# Minimal Db2uInstance shape this recipe and the example Transform expect.
+# Replace the license and storage class before apply.
+# Paste the enterprise license text IBM issued to you. Do not commit it.
+apiVersion: db2u.databases.ibm.com/v1
+kind: Db2uInstance
+metadata:
+  name: my-db2
+  namespace: db2u-prod
+  labels:
+    app.kubernetes.io/environment: prod
+    for-backup: "true"
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: environment
+                operator: In
+                values:
+                  - prod
+  license:
+    accept: true
+    value: REPLACE_WITH_DB2_LICENSE
+  nodes: 1
+  version: s12.1.4.0
+  environment:
+    dbType: db2wh
+    databases:
+      - name: BLUDB
+  storage:
+    - name: meta
+      type: create
+      spec:
+        storageClassName: REPLACE_WITH_STORAGE_CLASS
+        accessModes:
+          - ReadWriteMany
+        resources:
+          requests:
+            storage: 5Gi
+    - name: data
+      type: template
+      spec:
+        storageClassName: REPLACE_WITH_STORAGE_CLASS
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+    - name: tempts
+      type: template
+      spec:
+        storageClassName: REPLACE_WITH_STORAGE_CLASS
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi

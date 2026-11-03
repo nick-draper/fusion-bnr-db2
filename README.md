@@ -130,29 +130,29 @@ You need Fusion Backup & Restore **2.10 or newer**, a Db2u operator in its own n
 
 ![Order of operations from the plugin through a cross-namespace restore.](docs/images/deploy.svg)
 
+Replace `REPLACE_WITH_` in the secret, storage location, and instance examples, then:
+
 ```bash
-./scripts/restore-pre-req.sh
-oc apply -f recipe/db2u-parent-recipe.yaml
-oc apply -f recipe/db2u-instance-child-recipe.yaml
-./scripts/backup-pre-req.sh <DB2U_INSTANCE_NAMESPACE>
+./scripts/configure-bnr.sh
+./scripts/test-bnr.sh preflight
 ```
 
-Point the PolicyAssignment at `db2u-parent-recipe`, then follow [docs/end-to-end.md](docs/end-to-end.md) for the backup and the restore into a new namespace. Edit the files in [`examples/`](examples/) before you apply them. The Velero file there is a reminder, not a DataProtectionApplication.
+`configure-bnr.sh` creates both projects, the instance, the backup secret, storage location, policy, recipes, application, and policy assignment. It refuses to apply while a placeholder is still in those files. After a backup and a restore, `scripts/test-bnr.sh backup` and `scripts/test-bnr.sh restore` check the phases and the target namespace. The full sequence is in [docs/end-to-end.md](docs/end-to-end.md).
 
 | Path | Role |
 |------|------|
 | [docs/end-to-end.md](docs/end-to-end.md) | Deploy, backup, restore, and what to check |
 | [recipe/db2u-parent-recipe.yaml](recipe/db2u-parent-recipe.yaml) | Operator hooks, display name, workflow order |
 | [recipe/db2u-instance-child-recipe.yaml](recipe/db2u-instance-child-recipe.yaml) | Volumes, secrets, instance, quiesce, readiness |
-| [scripts/](scripts/) | Label, ClusterRole, and resource discovery |
-| [examples/](examples/) | Transform, Restore, and plugin reminder |
+| [scripts/](scripts/) | Configure Backup & Restore, then test preflight, backup, and restore |
+| [examples/](examples/) | Namespace, secret, storage location, policy, application, instance, Transform, Restore |
 
 ## Out of scope
 
 - `Db2uCluster`
 - Backing up the operator, OLM subscriptions, or cluster-scoped objects
 - Job hooks, and parallel children. Parallel execution only helps when one Application covers several instances and every parallel sequence is hooks only. A volume group forces sequential execution.
-- Storage credentials and backup-location secrets
+- Real object-storage keys and the Db2 license. The examples leave those as `REPLACE_WITH_` placeholders
 
 ## Further reading
 

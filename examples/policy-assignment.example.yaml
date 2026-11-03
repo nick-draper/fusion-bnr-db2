@@ -1,0 +1,17 @@
+---
+# Assign the parent recipe before the first backup.
+# The child recipe is discovered by label and is not named here.
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: PolicyAssignment
+metadata:
+  name: db2u-prod-policy-assignment
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  application: db2u-prod
+  backupPolicy: db2u-prod-backup-policy
+  runNow: false
+  recipe:
+    apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
+    kind: Recipe
+    name: db2u-parent-recipe
+    namespace: ibm-spectrum-fusion-ns
