@@ -4,8 +4,9 @@
 # Owns cross-namespace operator hooks. Instance volumes, CRs, and
 # manage_snapshots hooks live in the child recipe.
 #
-# Declares db2u-volumes so ${GROUP.db2u-volumes.namespace} resolves in the
-# operator hooks (they run in db2-operator but patch the instance namespace).
+# Declares a db2-operator group so the manager hook namespace is not hardcoded,
+# and db2u-volumes so ${GROUP.db2u-volumes.namespace} resolves to the instance
+# namespace (from the Application include list) inside hook commands.
 # Declares empty instance-backup / instance-restore workflows; the child
 # fills those sequences (Fusion 2.10+ dynamic recipe stub pattern).
 #
@@ -15,7 +16,8 @@
 #   - Db2 12.1.4+ recommended (db2u-velero-plugin preserves credentials/license)
 #
 # Customize:
-#   - Change hook namespace if your operator is not in db2-operator
+#   - Change groups.db2-operator.includedNamespaces if your operator is not
+#     in db2-operator (do not hardcode the hook namespace)
 #   - Assign this recipe name on the PolicyAssignment / Restore
 apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
@@ -25,10 +27,17 @@ metadata:
 spec:
   appType: db2uinstance
 
-  # Group is declared here so operator-hook variable substitution works.
-  # Effective namespace comes from the Application include list (do not
-  # hardcode). Volume backup itself runs in the child's instance-backup.
+  # db2-operator: hook target namespace via ${GROUP.db2-operator.namespace}.
+  # Not sequenced into backup/restore — operator is not part of the Application.
+  # db2u-volumes: instance namespace via ${GROUP.db2u-volumes.namespace} for
+  # command substitution; volume backup itself runs in the child workflow.
   groups:
+    - name: db2-operator
+      type: resource
+      includedNamespaces:
+        - db2-operator
+      includedResourceTypes: []
+
     - name: db2u-volumes
       type: volume
       disableTransform: false
@@ -36,7 +45,7 @@ spec:
   hooks:
     - name: db2u-operator-manager-exec
       type: exec
-      namespace: db2-operator
+      namespace: '${GROUP.db2-operator.namespace}'
       selectResource: pod
       labelSelector: control-plane=db2u-operator-manager
       onError: fail

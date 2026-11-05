@@ -73,7 +73,7 @@ Confirm these before you apply anything.
 
 **Database**
 
-- Db2u operator installed in `db2-operator` (change the parent hook `namespace` if yours differs).
+- Db2u operator installed in `db2-operator` (change the parent `groups.db2-operator.includedNamespaces` if yours differs; the hook uses `${GROUP.db2-operator.namespace}`).
 - A Ready `Db2uInstance` in `db2u-prod`, labeled later with `for-backup=true`.
 - Db2 **12.1.4+**.
 
@@ -114,7 +114,7 @@ Confirm the operator pod label the parent hook selects:
 oc get pods -n db2-operator -l control-plane=db2u-operator-manager
 ```
 
-One Running pod in container `manager` is required. If the label differs, edit `recipe/db2u-parent-recipe.yaml` before apply.
+One Running pod in container `manager` is required. If the label or operator namespace differs, edit the parent recipe’s `db2-operator` group / hook `labelSelector` before apply.
 
 ---
 
@@ -388,7 +388,7 @@ If a backup fails after suspend, `inverseOp` should resume I/O and clear mainten
 
 | Symptom | What to check |
 |---------|----------------|
-| Hook cannot find operator manager | Pod label `control-plane=db2u-operator-manager` in `db2-operator`. Parent hook namespace. |
+| Hook cannot find operator manager | Pod label `control-plane=db2u-operator-manager` in the operator namespace. Parent `groups.db2-operator.includedNamespaces` and `${GROUP.db2-operator.namespace}`. |
 | Backup stays in hook failure immediately | PolicyAssignment recipe is the parent. Instance namespace is on the Application. `for-backup=true` is only required for the **restore** readiness check, but label it before backup so the same objects are identifiable. |
 | `manage_snapshots` fails | Pod `name=dashmpp-head-0`, container `db2u`. Quiesce must run there; a Job hook cannot see that binary. |
 | Database left read-only after a failed backup | `inverseOp` should have resumed. If not, check the annotation `db2u.databases.ibm.com/maintenance-pause-reconcile` and Fusion hook logs. |
