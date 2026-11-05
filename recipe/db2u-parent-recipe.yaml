@@ -4,6 +4,11 @@
 # Owns cross-namespace operator hooks. Instance volumes, CRs, and
 # manage_snapshots hooks live in the child recipe.
 #
+# Declares db2u-volumes so ${GROUP.db2u-volumes.namespace} resolves in the
+# operator hooks (they run in db2-operator but patch the instance namespace).
+# Declares empty instance-backup / instance-restore workflows; the child
+# fills those sequences (Fusion 2.10+ dynamic recipe stub pattern).
+#
 # Prerequisites:
 #   - IBM Fusion Backup & Restore 2.10+
 #   - Db2u operator in a dedicated namespace (default: db2-operator)
@@ -19,6 +24,14 @@ metadata:
   namespace: ibm-spectrum-fusion-ns
 spec:
   appType: db2uinstance
+
+  # Group is declared here so operator-hook variable substitution works.
+  # Effective namespace comes from the Application include list (do not
+  # hardcode). Volume backup itself runs in the child's instance-backup.
+  groups:
+    - name: db2u-volumes
+      type: volume
+      disableTransform: false
 
   hooks:
     - name: db2u-operator-manager-exec
@@ -193,6 +206,20 @@ spec:
             echo 'Display-name patch complete'
 
   workflows:
+    # Stub workflows with empty sequences. The child recipe
+    # (db2u-instance-child-recipe) defines the same names with the real
+    # sequence; Fusion merges and runs the child when backup/restore
+    # references these via `workflow:`.
+    - name: instance-backup
+      failOn: any-error
+      priority: 0
+      sequence: []
+
+    - name: instance-restore
+      failOn: any-error
+      priority: 0
+      sequence: []
+
     - name: backup
       failOn: any-error
       priority: 0
