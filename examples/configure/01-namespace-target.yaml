@@ -1,0 +1,10 @@
+---
+# Empty target project for cross-namespace restore. Create before restore;
+# set-display-name patches openshift.io/display-name on this namespace.
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: dw-validation-qa
+  annotations:
+    openshift.io/display-name: Db2 Warehouse (QA)
+    openshift.io/description: Target namespace for restoring dw-validation into QA

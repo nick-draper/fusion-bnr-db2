@@ -1,8 +1,0 @@
----
-apiVersion: project.openshift.io/v1
-kind: Project
-metadata:
-  name: db2u-qa
-  annotations:
-    openshift.io/display-name: Db2 Warehouse (QA)
-    openshift.io/description: Empty target namespace for a cross-namespace restore

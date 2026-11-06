@@ -90,9 +90,9 @@ A backup taken in namespace A does not apply unchanged in namespace C. Affinity 
 
 Three things have to move together:
 
-1. `namespaceMapping` on the Restore (`db2u-prod` to `db2u-qa` in the example).
+1. `namespaceMapping` on the Restore (`dw-validation` to `dw-validation-qa` in the example).
 2. A Transform whose JSON paths match your `Db2uInstance`. The example is a starting point, not a schema for every cluster.
-3. `set-display-name` on the target project. The text is `Db2 Warehouse (<SUFFIX>)`. The suffix is the segment after the last `-`, in upper case. `dw-stg` becomes `Db2 Warehouse (STG)`.
+3. `set-display-name` on the target project. The text is `Db2 Warehouse (<SUFFIX>)`. The suffix is the segment after the last `-`, in upper case. `dw-validation-qa` becomes `Db2 Warehouse (QA)`.
 
 Create the target project before you apply the Restore. The display-name hook patches that namespace first.
 
@@ -126,26 +126,39 @@ While implementing this we also saw a Restore timeout followed by deletion of th
 
 ## Put it on a cluster
 
+Worked example namespaces: **`dw-validation`** (source) → **`dw-validation-qa`** (restore target).
+
 You need Fusion Backup & Restore **2.10 or newer**, a Db2u operator in its own namespace, a `Db2uInstance` on Db2 **12.1.4 or newer**, the Velero plugin on the Fusion DataProtectionApplication, and `oc` and `jq` on the workstation.
 
 ![Order of operations from the plugin through a cross-namespace restore.](docs/images/deploy.svg)
 
-Replace `REPLACE_WITH_` in the secret, storage location, and instance examples, then:
+| Folder | Meaning |
+|--------|---------|
+| [`examples/configure/`](examples/configure/) | **Required** Fusion BNR application setup (projects, instance, storage, policy, Application, assignment, Transform) |
+| [`examples/operate/`](examples/operate/) | **Operational** Restore CR — backups are started from the UI / API |
+| [`scripts/`](scripts/) | `configure-bnr.sh`, then `test-bnr.sh before` / `after-backup` / `after-restore` |
+
+Replace `REPLACE_WITH_` under `examples/configure/`, then:
 
 ```bash
 ./scripts/configure-bnr.sh
-./scripts/test-bnr.sh preflight
+./scripts/test-bnr.sh before
+# start a backup from Fusion UI — see examples/operate/README.md
+./scripts/test-bnr.sh after-backup
+# edit examples/operate/restore-to-qa.yaml with the Backup name, apply it
+./scripts/test-bnr.sh after-restore
 ```
 
-`configure-bnr.sh` creates both projects, the instance, the backup secret, storage location, policy, recipes, application, and policy assignment. It refuses to apply while a placeholder is still in those files. After a backup and a restore, `scripts/test-bnr.sh backup` and `scripts/test-bnr.sh restore` check the phases and the target namespace. The full sequence is in [docs/end-to-end.md](docs/end-to-end.md).
+Full sequence: [docs/end-to-end.md](docs/end-to-end.md). Pack overview: [examples/README.md](examples/README.md).
 
 | Path | Role |
 |------|------|
 | [docs/end-to-end.md](docs/end-to-end.md) | Deploy, backup, restore, and what to check |
 | [recipe/db2u-parent-recipe.yaml](recipe/db2u-parent-recipe.yaml) | Operator hooks, display name, workflow order |
 | [recipe/db2u-instance-child-recipe.yaml](recipe/db2u-instance-child-recipe.yaml) | Volumes, secrets, instance, quiesce, readiness |
-| [scripts/](scripts/) | Configure Backup & Restore, then test preflight, backup, and restore |
-| [examples/](examples/) | Namespace, secret, storage location, policy, application, instance, Transform, Restore |
+| [examples/configure/](examples/configure/) | Required configuration for `dw-validation` |
+| [examples/operate/](examples/operate/) | Restore operation CR |
+| [scripts/](scripts/) | Configure, then verify before / after backup / after restore |
 
 ## Out of scope
 
