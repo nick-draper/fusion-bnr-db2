@@ -1,0 +1,11 @@
+---
+# NOTE ONLY — do not apply this file as a DataProtectionApplication.
+#
+# Install db2u-velero-plugin on the Fusion DPA with IBM’s utility:
+#   https://www.ibm.com/docs/en/software-hub/5.4.x?topic=utilities-fusion-backup-restore-utility
+#
+# Without it, restore can look Ready while credentials/license are wrong.
+#
+# Verify:
+#   oc get dpa velero -n ibm-backup-restore \
+#     -o jsonpath='{.spec.configuration.velero.customPlugins}' ; echo

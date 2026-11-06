@@ -1,14 +1,13 @@
 ---
 # S3-compatible location used by the backup policy.
-# Replace the endpoint and bucket. If the endpoint uses a private CA,
-# create that cert secret separately and set privateCertificateName.
+# Replace endpoint and bucket. Private CA: set privateCertificateName separately.
 apiVersion: data-protection.isf.ibm.com/v1alpha1
 kind: BackupStorageLocation
 metadata:
-  name: db2u-prod-backup-storage-location
+  name: dw-validation-backup-storage-location
   namespace: ibm-spectrum-fusion-ns
 spec:
-  credentialName: db2u-backup-secret
+  credentialName: dw-validation-backup-secret
   provider: isf-backup-restore
   type: s3
   params:

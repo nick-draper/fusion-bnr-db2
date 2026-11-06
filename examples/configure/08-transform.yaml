@@ -1,31 +1,22 @@
 ---
-# Example Transform: remaps a restored Db2uInstance from a prod-like source
-# environment into a qa target namespace.
-#
-# Edit before apply:
-#   - resourceNameRegex to match your Db2uInstance name
-#   - JSON paths for your affinity / environment labels
-#   - target values (qa, restored markers, etc.)
-#
-# Pair with restore/db2u-restore-cross-namespace.example.yaml
+# Remap restored objects from dw-validation into dw-validation-qa.
+# Edit JSON paths if your Db2uInstance affinity/labels differ.
+# Applied at configure time; used by operate/restore-to-qa.yaml.
 apiVersion: data-protection.isf.ibm.com/v1alpha1
 kind: Transform
 metadata:
-  name: db2u-transform-prod-to-qa
+  name: dw-validation-to-qa
   namespace: ibm-spectrum-fusion-ns
 spec:
   transforms:
     - name: update-db2uinstance
       subject:
         groupResource: db2uinstances.db2u.databases.ibm.com
-        # Match the backed-up instance name (source)
-        resourceNameRegex: my-db2
+        resourceNameRegex: dwdb
       json:
-        # Node affinity environment value (adjust path if your CR differs)
         - op: replace
           path: /spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values/0
           value: qa
-        # Environment label — escape '/' in the key as ~1 per JSON Pointer
         - op: replace
           path: /metadata/labels/app.kubernetes.io~1environment
           value: qa

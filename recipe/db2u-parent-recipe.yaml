@@ -4,13 +4,22 @@
 # Owns cross-namespace operator hooks. Instance volumes, CRs, and
 # manage_snapshots hooks live in the child recipe.
 #
+# Declares a db2-operator group so the manager hook namespace is not hardcoded,
+# and db2u-volumes so ${GROUP.db2u-volumes.namespace} resolves to the instance
+# namespace (from the Application include list) inside hook commands.
+# Declares empty instance-backup / instance-restore workflows; the child
+# fills those sequences (Fusion 2.10+ dynamic recipe stub pattern).
+#
 # Prerequisites:
 #   - IBM Fusion Backup & Restore 2.10+
 #   - Db2u operator in a dedicated namespace (default: db2-operator)
 #   - Db2 12.1.4+ recommended (db2u-velero-plugin preserves credentials/license)
 #
 # Customize:
-#   - Change hook namespace if your operator is not in db2-operator
+#   - Change groups.db2-operator.includedNamespaces if your operator ns differs
+#     (hook uses ${GROUP.db2-operator.namespace}; do not hardcode the hook field)
+#   - Instance namespace is NOT listed here — ${GROUP.db2u-volumes.namespace}
+#     comes from the Application include list (keeps the recipe portable)
 #   - Assign this recipe name on the PolicyAssignment / Restore
 apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
@@ -20,15 +29,33 @@ metadata:
 spec:
   appType: db2uinstance
 
+  # db2-operator: only explicit ns — Application excludes the operator, so the
+  # group must name it for ${GROUP.db2-operator.namespace}. Not backed up.
+  # db2u-volumes: no includedNamespaces — effective ns is the Application's
+  # instance namespace (dynamic). Used only so commands can read
+  # ${GROUP.db2u-volumes.namespace}; volume backup runs in the child.
+  groups:
+    - name: db2-operator
+      type: resource
+      includedNamespaces:
+        - db2-operator
+      includedResourceTypes: []
+
+    - name: db2u-volumes
+      type: volume
+      disableTransform: false
+
   hooks:
     - name: db2u-operator-manager-exec
       type: exec
-      namespace: db2-operator
+      namespace: '${GROUP.db2-operator.namespace}'
       selectResource: pod
       labelSelector: control-plane=db2u-operator-manager
       onError: fail
       timeout: 120
       ops:
+        # Fusion treats every ${...} in op commands as a recipe variable.
+        # Only ${GROUP.*} is allowed; use $shell_var (no braces) for the rest.
         # Pause Db2uInstance reconcile before snapshot; undo on failure
         - name: maintenance-mode-on
           container: manager
@@ -40,24 +67,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/${ns}/db2uinstances"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/$ns/db2uinstances"
 
             db2uinstances=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uinstance in ${db2uinstances}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uinstance in $db2uinstances; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uinstance}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uinstance?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":"true"}}}'
             done
 
@@ -70,24 +97,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/${ns}/db2uinstances"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/$ns/db2uinstances"
 
             db2uinstances=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uinstance in ${db2uinstances}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uinstance in $db2uinstances; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uinstance}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uinstance?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":null}}}'
             done
 
@@ -102,24 +129,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/${ns}/db2uengines"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/$ns/db2uengines"
 
             db2uengines=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uengine in ${db2uengines}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uengine in $db2uengines; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uengine}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uengine?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":"true"}}}'
             done
 
@@ -132,24 +159,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/${ns}/db2uengines"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/$ns/db2uengines"
 
             db2uengines=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uengine in ${db2uengines}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uengine in $db2uengines; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uengine}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uengine?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":null}}}'
             done
 
@@ -176,23 +203,38 @@ spec:
           command: |
             set -e
             ns='${GROUP.db2u-volumes.namespace}'
-            # Suffix after final '-': dw-stg -> stg, my-app-qa -> qa
-            suffix="${ns##*-}"
-            env_label=$(printf '%s' "${suffix}" | tr '[:lower:]' '[:upper:]')
-            DISPLAY_NAME="Db2 Warehouse (${env_label})"
+            # Extract suffix after final '-'
+            # Example: dw-stg -> stg
+            suffix=$(printf '%s' "$ns" | awk -F- '{print $NF}')
+            env_label=$(printf '%s' "$suffix" | tr '[:lower:]' '[:upper:]')
+            DISPLAY_NAME="Db2 Warehouse ($env_label)"
 
-            echo "Setting OpenShift project display-name for ${ns} -> ${DISPLAY_NAME}"
+            echo "Setting OpenShift project display-name for $ns -> $DISPLAY_NAME"
 
             curl -X PATCH \
               --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
               -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
               -H "Content-Type: application/merge-patch+json" \
-              "https://kubernetes.default.svc/api/v1/namespaces/${ns}?fieldManager=kubectl-annotate" \
-              -d "{\"metadata\":{\"annotations\":{\"openshift.io/display-name\":\"${DISPLAY_NAME}\"}}}"
+              "https://kubernetes.default.svc/api/v1/namespaces/$ns?fieldManager=kubectl-annotate" \
+              -d "{\"metadata\":{\"annotations\":{\"openshift.io/display-name\":\"$DISPLAY_NAME\"}}}"
 
             echo 'Display-name patch complete'
 
   workflows:
+    # Stub workflows with empty sequences. The child recipe
+    # (db2u-instance-child-recipe) defines the same names with the real
+    # sequence; Fusion merges and runs the child when backup/restore
+    # references these via `workflow:`.
+    - name: instance-backup
+      failOn: any-error
+      priority: 0
+      sequence: []
+
+    - name: instance-restore
+      failOn: any-error
+      priority: 0
+      sequence: []
+
     - name: backup
       failOn: any-error
       priority: 0
