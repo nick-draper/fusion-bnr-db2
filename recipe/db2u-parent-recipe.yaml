@@ -203,8 +203,8 @@ spec:
           command: |
             set -e
             ns='${GROUP.db2u-volumes.namespace}'
-            # Suffix after final '-': dw-stg -> stg (avoid ${ns##*-}; Fusion
-            # rejects non-GROUP ${...} in op commands)
+            # Extract suffix after final '-'
+            # Example: dw-stg -> stg
             suffix=$(printf '%s' "$ns" | awk -F- '{print $NF}')
             env_label=$(printf '%s' "$suffix" | tr '[:lower:]' '[:upper:]')
             DISPLAY_NAME="Db2 Warehouse ($env_label)"
