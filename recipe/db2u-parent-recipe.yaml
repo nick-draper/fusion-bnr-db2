@@ -57,6 +57,8 @@ spec:
       onError: fail
       timeout: 120
       ops:
+        # Fusion treats every ${...} in op commands as a recipe variable.
+        # Only ${GROUP.*} is allowed; use $shell_var (no braces) for the rest.
         # Pause Db2uInstance reconcile before snapshot; undo on failure
         - name: maintenance-mode-on
           container: manager
@@ -68,24 +70,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/${ns}/db2uinstances"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/$ns/db2uinstances"
 
             db2uinstances=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uinstance in ${db2uinstances}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uinstance in $db2uinstances; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uinstance}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uinstance?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":"true"}}}'
             done
 
@@ -98,24 +100,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/${ns}/db2uinstances"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/$ns/db2uinstances"
 
             db2uinstances=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uinstance in ${db2uinstances}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uinstance in $db2uinstances; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uinstance}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uinstance?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":null}}}'
             done
 
@@ -130,24 +132,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/${ns}/db2uengines"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/$ns/db2uengines"
 
             db2uengines=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uengine in ${db2uengines}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uengine in $db2uengines; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uengine}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uengine?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":"true"}}}'
             done
 
@@ -160,24 +162,24 @@ spec:
             ns='${GROUP.db2u-volumes.namespace}'
             ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/${ns}/db2uengines"
+            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/$ns/db2uengines"
 
             db2uengines=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+              curl -X GET --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Accept: application/yaml' \
-                -k "${api}" \
+                -k "$api" \
               | grep '^    name: ' \
               | tr -d ' ' \
               | cut -c 6-
             )
 
-            for db2uengine in ${db2uengines}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
+            for db2uengine in $db2uengines; do
+              curl -X PATCH --cacert "$ca" \
+                -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/merge-patch+json' \
                 -H 'Accept: application/json' \
-                -k "${api}/${db2uengine}?fieldManager=kubectl-annotate" \
+                -k "$api/$db2uengine?fieldManager=kubectl-annotate" \
                 -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":null}}}'
             done
 
@@ -204,19 +206,20 @@ spec:
           command: |
             set -e
             ns='${GROUP.db2u-volumes.namespace}'
-            # Suffix after final '-': dw-stg -> stg, my-app-qa -> qa
-            suffix="${ns##*-}"
-            env_label=$(printf '%s' "${suffix}" | tr '[:lower:]' '[:upper:]')
-            DISPLAY_NAME="Db2 Warehouse (${env_label})"
+            # Suffix after final '-': dw-stg -> stg (avoid ${ns##*-}; Fusion
+            # rejects non-GROUP ${...} in op commands)
+            suffix=$(printf '%s' "$ns" | awk -F- '{print $NF}')
+            env_label=$(printf '%s' "$suffix" | tr '[:lower:]' '[:upper:]')
+            DISPLAY_NAME="Db2 Warehouse ($env_label)"
 
-            echo "Setting OpenShift project display-name for ${ns} -> ${DISPLAY_NAME}"
+            echo "Setting OpenShift project display-name for $ns -> $DISPLAY_NAME"
 
             curl -X PATCH \
               --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
               -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
               -H "Content-Type: application/merge-patch+json" \
-              "https://kubernetes.default.svc/api/v1/namespaces/${ns}?fieldManager=kubectl-annotate" \
-              -d "{\"metadata\":{\"annotations\":{\"openshift.io/display-name\":\"${DISPLAY_NAME}\"}}}"
+              "https://kubernetes.default.svc/api/v1/namespaces/$ns?fieldManager=kubectl-annotate" \
+              -d "{\"metadata\":{\"annotations\":{\"openshift.io/display-name\":\"$DISPLAY_NAME\"}}}"
 
             echo 'Display-name patch complete'
 
