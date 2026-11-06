@@ -23,20 +23,15 @@ spec:
   # everything else in the namespace (including operator/OLM if colocated).
   # An allow-list fails closed: a new resource type is not backed up until
   # you add it after resource discovery.
-  # includedNamespaces must match the Application instance namespace so
-  # ${GROUP.*.namespace} resolves (same value as parent db2u-volumes).
+  # No includedNamespaces — effective ns comes from the Application (portable).
   groups:
     - name: db2u-volumes
       type: volume
       disableTransform: false
-      includedNamespaces:
-        - db2u-prod
 
     - name: db2u-resources
       type: resource
       disableTransform: false
-      includedNamespaces:
-        - db2u-prod
       includedResourceTypes:
         - configmaps
         - secrets
@@ -44,8 +39,6 @@ spec:
     - name: db2u-db2uinstances
       type: resource
       disableTransform: false
-      includedNamespaces:
-        - db2u-prod
       includedResourceTypes:
         - db2uinstances.db2u.databases.ibm.com
 

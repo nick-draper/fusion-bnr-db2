@@ -18,8 +18,8 @@
 # Customize:
 #   - Change groups.db2-operator.includedNamespaces if your operator ns differs
 #     (hook uses ${GROUP.db2-operator.namespace}; do not hardcode the hook field)
-#   - Change groups.db2u-volumes.includedNamespaces to match the Application
-#     instance namespace (commands use ${GROUP.db2u-volumes.namespace})
+#   - Instance namespace is NOT listed here — ${GROUP.db2u-volumes.namespace}
+#     comes from the Application include list (keeps the recipe portable)
 #   - Assign this recipe name on the PolicyAssignment / Restore
 apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
@@ -29,12 +29,11 @@ metadata:
 spec:
   appType: db2uinstance
 
-  # db2-operator: hook target via ${GROUP.db2-operator.namespace}.
-  # Not sequenced into backup/restore — operator is not on the Application.
-  # db2u-volumes: instance ns via ${GROUP.db2u-volumes.namespace} for command
-  # substitution (set-display-name, maintenance patches). Must set
-  # includedNamespaces so .namespace resolves; match Application instance ns.
-  # Restore namespaceMapping remaps it. Volume backup runs in the child workflow.
+  # db2-operator: only explicit ns — Application excludes the operator, so the
+  # group must name it for ${GROUP.db2-operator.namespace}. Not backed up.
+  # db2u-volumes: no includedNamespaces — effective ns is the Application's
+  # instance namespace (dynamic). Used only so commands can read
+  # ${GROUP.db2u-volumes.namespace}; volume backup runs in the child.
   groups:
     - name: db2-operator
       type: resource
@@ -45,8 +44,6 @@ spec:
     - name: db2u-volumes
       type: volume
       disableTransform: false
-      includedNamespaces:
-        - db2u-prod
 
   hooks:
     - name: db2u-operator-manager-exec

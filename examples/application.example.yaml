@@ -1,5 +1,7 @@
 ---
 # Protect the instance namespace only. Do not add db2-operator.
+# Recipe groups without includedNamespaces take this list as their
+# effective namespace (${GROUP.db2u-volumes.namespace}, etc.).
 apiVersion: application.isf.ibm.com/v1alpha1
 kind: Application
 metadata:
