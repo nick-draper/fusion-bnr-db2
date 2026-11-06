@@ -74,7 +74,7 @@ Confirm these before you apply anything.
 **Database**
 
 - Db2u operator installed in `db2-operator` (change the parent `groups.db2-operator.includedNamespaces` if yours differs; the hook uses `${GROUP.db2-operator.namespace}`).
-- A Ready `Db2uInstance` in `db2u-prod`, labeled later with `for-backup=true`.
+- A Ready `Db2uInstance` in `db2u-prod`, labeled later with `for-backup=true`. If the instance namespace is not `db2u-prod`, set `includedNamespaces` on parent `db2u-volumes` and on the child groups to that name so `${GROUP.db2u-volumes.namespace}` resolves.
 - Db2 **12.1.4+**.
 
 **Velero plugin**

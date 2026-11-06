@@ -16,8 +16,10 @@
 #   - Db2 12.1.4+ recommended (db2u-velero-plugin preserves credentials/license)
 #
 # Customize:
-#   - Change groups.db2-operator.includedNamespaces if your operator is not
-#     in db2-operator (do not hardcode the hook namespace)
+#   - Change groups.db2-operator.includedNamespaces if your operator ns differs
+#     (hook uses ${GROUP.db2-operator.namespace}; do not hardcode the hook field)
+#   - Change groups.db2u-volumes.includedNamespaces to match the Application
+#     instance namespace (commands use ${GROUP.db2u-volumes.namespace})
 #   - Assign this recipe name on the PolicyAssignment / Restore
 apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
@@ -27,10 +29,12 @@ metadata:
 spec:
   appType: db2uinstance
 
-  # db2-operator: hook target namespace via ${GROUP.db2-operator.namespace}.
-  # Not sequenced into backup/restore — operator is not part of the Application.
-  # db2u-volumes: instance namespace via ${GROUP.db2u-volumes.namespace} for
-  # command substitution; volume backup itself runs in the child workflow.
+  # db2-operator: hook target via ${GROUP.db2-operator.namespace}.
+  # Not sequenced into backup/restore — operator is not on the Application.
+  # db2u-volumes: instance ns via ${GROUP.db2u-volumes.namespace} for command
+  # substitution (set-display-name, maintenance patches). Must set
+  # includedNamespaces so .namespace resolves; match Application instance ns.
+  # Restore namespaceMapping remaps it. Volume backup runs in the child workflow.
   groups:
     - name: db2-operator
       type: resource
@@ -41,6 +45,8 @@ spec:
     - name: db2u-volumes
       type: volume
       disableTransform: false
+      includedNamespaces:
+        - db2u-prod
 
   hooks:
     - name: db2u-operator-manager-exec
