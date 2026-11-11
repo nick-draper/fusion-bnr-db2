@@ -1,6 +1,7 @@
 ---
 # Empty target project for cross-namespace restore. Create before restore;
-# set-display-name patches openshift.io/display-name on this namespace.
+# ns-display-name (parent recipe) overwrites openshift.io/display-name with
+# "Db2 Warehouse (Restored)" at the end of the restore.
 apiVersion: project.openshift.io/v1
 kind: Project
 metadata:

@@ -1,0 +1,54 @@
+---
+# Permissions Fusion's transaction-manager needs for the recipe hooks.
+#
+#   db2uinstances, db2uengines  get/list for the check hooks; patch for the
+#                               maintenance-pause and restored annotation hooks
+#   namespaces                  patch for the ns-display-name annotation hook
+#
+# A dedicated ClusterRole (rather than patching Fusion's own
+# transaction-manager-ibm-backup-restore role) is idempotent and is not
+# reverted when the Fusion operator reconciles or upgrades its role.
+#
+# One binding covers every restore target: the service account lives in a
+# fixed namespace, so nothing here names an instance namespace.
+#
+# Security note: transaction-manager can patch metadata on any namespace.
+# Drop the namespaces rule if you set display names another way.
+#
+# Needed on every cluster that backs up (maintenance hooks) and every cluster
+# that restores.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: transaction-manager-db2u
+rules:
+  - apiGroups:
+      - db2u.databases.ibm.com
+    resources:
+      - db2uinstances
+      - db2uengines
+    verbs:
+      - get
+      - list
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: transaction-manager-db2u
+subjects:
+  - kind: ServiceAccount
+    name: transaction-manager
+    namespace: ibm-backup-restore
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: transaction-manager-db2u

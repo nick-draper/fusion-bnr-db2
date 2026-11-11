@@ -1,7 +1,7 @@
 ---
 # Fusion Application for this Db2uInstance.
 # Include the instance namespace only. Do not add db2-operator.
-# Recipe ${GROUP.db2u-volumes.namespace} resolves from this list.
+# The recipes resolve the db2u-instances GROUP namespace from this list.
 apiVersion: application.isf.ibm.com/v1alpha1
 kind: Application
 metadata:

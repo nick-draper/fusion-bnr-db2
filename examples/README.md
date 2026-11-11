@@ -18,7 +18,7 @@ scripts/     →  verify-before / verify-after-backup / verify-after-restore
 ## Order for a Db2 user
 
 1. Fill every `REPLACE_WITH_` in `configure/` (secret, storage location, instance license + storage class).
-2. `./scripts/configure-bnr.sh` — applies `configure/`, both recipes, ClusterRole + `for-backup` label.
+2. `./scripts/configure-bnr.sh` — applies `configure/`, both recipes, transaction-manager RBAC + `for-backup` label.
 3. `./scripts/test-bnr.sh before` — must pass before the first backup.
 4. Start a backup (Fusion UI **Back up now**, or see `operate/README.md`).
 5. `./scripts/test-bnr.sh after-backup`

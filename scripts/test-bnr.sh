@@ -39,8 +39,18 @@ case "${mode}" in
   before|preflight)
     echo "=== before backup: required configure/ objects ==="
     oc get project "${src_ns}" "${tgt_ns}" >/dev/null || fail "${src_ns} or ${tgt_ns} project is missing"
-    oc get pods -n db2-operator -l control-plane=db2u-operator-manager --no-headers | grep -q Running \
-      || fail "db2u-operator-manager is not Running in db2-operator"
+    # The recipes never run in the operator namespace, but the operator must be
+    # up to act on the maintenance annotations.
+    oc get pods -A -l control-plane=db2u-operator-manager --no-headers | grep -q Running \
+      || fail "no Running db2u-operator-manager pod found"
+
+    sa=system:serviceaccount:ibm-backup-restore:transaction-manager
+    oc auth can-i patch db2uinstances.db2u.databases.ibm.com -n "${src_ns}" --as="${sa}" >/dev/null \
+      || fail "transaction-manager cannot patch db2uinstances; run scripts/restore-pre-req.sh"
+    oc auth can-i patch db2uengines.db2u.databases.ibm.com -n "${src_ns}" --as="${sa}" >/dev/null \
+      || fail "transaction-manager cannot patch db2uengines; run scripts/restore-pre-req.sh"
+    oc auth can-i patch namespaces --as="${sa}" >/dev/null \
+      || fail "transaction-manager cannot patch namespaces; run scripts/restore-pre-req.sh"
 
     need secret dw-validation-backup-secret "${fusion_ns}"
     need backupstoragelocation dw-validation-backup-storage-location "${fusion_ns}"
@@ -113,7 +123,9 @@ case "${mode}" in
   after-restore|restore)
     echo "=== after restore ==="
     display=$(oc get ns "${tgt_ns}" -o jsonpath='{.metadata.annotations.openshift\.io/display-name}')
-    [ "${display}" = "Db2 Warehouse (QA)" ] || fail "display name is '${display}', expected Db2 Warehouse (QA)"
+    # ns-display-name writes fixed text. Anything else means its labelSelector
+    # variable was not substituted and the hook matched nothing.
+    [ "${display}" = "Db2 Warehouse (Restored)" ] || fail "display name is '${display}', expected Db2 Warehouse (Restored)"
     restored=$(oc get db2uinstance "${instance}" -n "${tgt_ns}" -o jsonpath='{.metadata.annotations.db2u\.fusion/restored}')
     [ "${restored}" = "true" ] || fail "db2u.fusion/restored is '${restored}'"
     state=$(oc get db2uinstance "${instance}" -n "${tgt_ns}" -o jsonpath='{.status.state}')
