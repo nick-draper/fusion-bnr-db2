@@ -49,8 +49,6 @@ case "${mode}" in
       || fail "transaction-manager cannot patch db2uinstances; run scripts/restore-pre-req.sh"
     oc auth can-i patch db2uengines.db2u.databases.ibm.com -n "${src_ns}" --as="${sa}" >/dev/null \
       || fail "transaction-manager cannot patch db2uengines; run scripts/restore-pre-req.sh"
-    oc auth can-i patch namespaces --as="${sa}" >/dev/null \
-      || fail "transaction-manager cannot patch namespaces; run scripts/restore-pre-req.sh"
 
     need secret dw-validation-backup-secret "${fusion_ns}"
     need backupstoragelocation dw-validation-backup-storage-location "${fusion_ns}"
@@ -123,9 +121,10 @@ case "${mode}" in
   after-restore|restore)
     echo "=== after restore ==="
     display=$(oc get ns "${tgt_ns}" -o jsonpath='{.metadata.annotations.openshift\.io/display-name}')
-    # ns-display-name writes fixed text. Anything else means its labelSelector
-    # variable was not substituted and the hook matched nothing.
-    [ "${display}" = "Db2 Warehouse (Restored)" ] || fail "display name is '${display}', expected Db2 Warehouse (Restored)"
+    # Comes from configure/01-namespace-target.yaml, created before restore.
+    # The source name here means restore overwrote the Project metadata;
+    # reapply the target manifest (or let GitOps reassert it).
+    [ "${display}" = "Db2 Warehouse (QA)" ] || fail "display name is '${display}', expected Db2 Warehouse (QA)"
     restored=$(oc get db2uinstance "${instance}" -n "${tgt_ns}" -o jsonpath='{.metadata.annotations.db2u\.fusion/restored}')
     [ "${restored}" = "true" ] || fail "db2u.fusion/restored is '${restored}'"
     state=$(oc get db2uinstance "${instance}" -n "${tgt_ns}" -o jsonpath='{.status.state}')

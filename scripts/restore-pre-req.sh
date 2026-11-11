@@ -7,7 +7,6 @@
 #     - maintenance-pause-reconcile on db2uinstances / db2uengines (backup
 #       and restore)
 #     - db2u.fusion/restored on the restored db2uinstance
-#     - openshift.io/display-name on the target namespace
 #   The check hooks also read db2uinstances / db2uengines. Fusion's shipped
 #   ClusterRole does not always include those verbs; without them the hooks
 #   fail with Forbidden.
@@ -36,11 +35,10 @@ oc apply -f "${root}/rbac/transaction-manager-db2u.yaml"
 
 sa=system:serviceaccount:ibm-backup-restore:transaction-manager
 for check in "patch db2uinstances.db2u.databases.ibm.com" \
-             "patch db2uengines.db2u.databases.ibm.com" \
-             "patch namespaces"; do
+             "patch db2uengines.db2u.databases.ibm.com"; do
   # shellcheck disable=SC2086
   oc auth can-i ${check} --all-namespaces --as="${sa}" >/dev/null \
     || { echo "transaction-manager still cannot: ${check}" >&2; exit 1; }
 done
 
-echo "transaction-manager can patch Db2u instances, engines, and namespaces"
+echo "transaction-manager can patch Db2u instances and engines"
