@@ -21,7 +21,7 @@ Also required (applied by `scripts/configure-bnr.sh`, not duplicated here):
 
 - `recipe/db2u-parent-recipe.yaml`
 - `recipe/db2u-instance-child-recipe.yaml`
-- `scripts/restore-pre-req.sh` (ClusterRole)
+- `scripts/restore-pre-req.sh` (transaction-manager RBAC)
 - `scripts/backup-pre-req.sh dw-validation` (`for-backup=true`)
 
 Prefer `./scripts/configure-bnr.sh` from the repo root over applying files by hand.
