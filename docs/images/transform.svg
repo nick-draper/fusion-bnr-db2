@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img">
   <title>Cross-namespace restore and transform</title>
-  <desc>A backup from the source namespace is restored into a new namespace. The Transform rewrites affinity and labels. The recipe sets the target Project display name with an annotation hook.</desc>
+  <desc>A backup from the source namespace is restored into a new namespace. The Transform rewrites affinity and labels. The target Project manifest owns its display name.</desc>
   <rect width="1200" height="560" rx="16" fill="#f4f7fb"/>
   <text x="40" y="48" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="22" font-weight="600">Transform on restore</text>
   <text x="40" y="72" fill="#525252" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Restore is not the backup played backwards. Source names and affinity stay stale unless you rewrite them.</text>
@@ -38,9 +38,9 @@
   <text x="946" y="140" fill="#198038" font-family="system-ui, Segoe UI, sans-serif" font-size="11" font-weight="600">TARGET</text>
   <text x="946" y="168" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">db2u-qa</text>
   <text x="946" y="204" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Project display name</text>
-  <text x="946" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Db2 Warehouse (Restored)</text>
-  <text x="946" y="264" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">set by annotation hook</text>
-  <text x="946" y="288" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">per-env name: Project manifest</text>
+  <text x="946" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Db2 Warehouse (QA)</text>
+  <text x="946" y="264" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">from the target Project</text>
+  <text x="946" y="288" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">manifest, applied first</text>
   <text x="946" y="324" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">annotation restored=true</text>
   <text x="946" y="368" fill="#525252" font-family="system-ui, Segoe UI, sans-serif" font-size="12" font-weight="500">Create the project first</text>
 

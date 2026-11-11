@@ -49,7 +49,7 @@ No hook runs in the operator namespace. Maintenance mode is an annotation on the
 | Exclude-list, then copy everything else | Allow-list: volumes, configmaps, secrets, `Db2uInstance` |
 | No undo if the snapshot fails after suspend | `inverseOp` resumes I/O and clears maintenance |
 | Same-namespace restore only | Transform, `namespaceMapping`, and a Restore example |
-| Target Project keeps the source display name | `ns-display-name` sets `Db2 Warehouse (Restored)` on the target namespace |
+| Target Project keeps the source display name | The target Project is created first from its own manifest, which owns the display name |
 | One flat recipe | Fusion 2.10 parent/child. The assignment names the parent |
 | Readiness is only `state == Ready` | The instance check also requires `FormationStatus == OK` |
 | Nothing marks a restored database | Annotation `db2u.fusion/restored=true` |
@@ -57,7 +57,7 @@ No hook runs in the operator namespace. Maintenance mode is an annotation on the
 Two scripts from IBM’s folder are still required, and they are limited to `Db2uInstance`:
 
 - [`scripts/backup-pre-req.sh`](scripts/backup-pre-req.sh) sets `for-backup=true`. The readiness check selects on that label. Without it, restore waits until timeout.
-- [`scripts/restore-pre-req.sh`](scripts/restore-pre-req.sh) applies [`rbac/transaction-manager-db2u.yaml`](rbac/transaction-manager-db2u.yaml): `get`, `list`, and `patch` on `db2uinstances`, `db2uengines`, and `namespaces` for Fusion’s transaction-manager. Every annotation hook runs as that account, so run it on every cluster that backs up **and** every cluster that restores. Without it the hooks fail with Forbidden.
+- [`scripts/restore-pre-req.sh`](scripts/restore-pre-req.sh) applies [`rbac/transaction-manager-db2u.yaml`](rbac/transaction-manager-db2u.yaml): `get`, `list`, and `patch` on `db2uinstances` and `db2uengines` for Fusion’s transaction-manager. Every annotation hook runs as that account, so run it on every cluster that backs up **and** every cluster that restores. Without it the hooks fail with Forbidden.
 
 ## How backup and restore run
 
@@ -66,7 +66,7 @@ Fusion 2.10 builds one workflow from a parent plus a child. The parent does not 
 ```
 backup:  pause instance → pause engine → instance-backup → unpause instance → unpause engine
 restore: instance-restore-data → unpause instance → unpause engine
-         → instance-restore-post → set target display name
+         → instance-restore-post
 
 instance-backup:       resources → Db2uInstance → suspend → volumes → resume
 instance-restore-data: volumes → resources → Db2uInstance
@@ -113,9 +113,9 @@ Three things have to move together:
 
 1. `namespaceMapping` on the Restore (`dw-validation` to `dw-validation-qa` in the example).
 2. A Transform whose JSON paths match your `Db2uInstance`. The example is a starting point, not a schema for every cluster.
-3. `ns-display-name` on the target project. It sets `Db2 Warehouse (Restored)`. An annotation hook writes fixed text, so the per-environment suffix (`dw-validation-qa` → `Db2 Warehouse (QA)`) that the old exec hook derived is gone. Keep a per-environment name on the target Project manifest ([`examples/configure/01-namespace-target.yaml`](examples/configure/01-namespace-target.yaml)) or in GitOps if you need it.
+3. The target Project display name, from the target Project manifest ([`examples/configure/01-namespace-target.yaml`](examples/configure/01-namespace-target.yaml)), applied before the Restore. `dw-validation-qa` is `Db2 Warehouse (QA)`.
 
-The hook selects the namespace by `kubernetes.io/metadata.name` with the GROUP variable. IBM documents variable substitution in hook namespaces and exec commands, not in `labelSelector`, so confirm on your Fusion version that the display name changes. The hook is `onError: continue`, so a miss does not fail the restore.
+The recipes do not set it. An annotation hook on the Namespace was tried and fails recipe validation: Fusion does not substitute GROUP variables in `labelSelector`, so the selector reaches the API server as the literal variable text and the whole backup is rejected. An exec hook would need a pod in a fixed namespace (the `KeyError` above) or a database pod with rights to patch Namespaces.
 
 Create the target project before you apply the Restore.
 

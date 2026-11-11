@@ -51,7 +51,7 @@
   <text class="h" x="456" y="326">db2u-parent-recipe</text>
   <text class="b" x="456" y="352">pause / unpause Db2uInstance (annotation)</text>
   <text class="b" x="456" y="374">pause / unpause Db2uEngine (annotation)</text>
-  <text class="b" x="456" y="396">target display name (annotation)</text>
+  <text class="b" x="456" y="396">restore order: data, unpause, readiness</text>
 
   <rect x="440" y="454" width="320" height="154" rx="10" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
   <text class="chip" x="456" y="480" fill="#198038">CHILD</text>
@@ -77,8 +77,7 @@
   <text class="b" x="848" y="490">3  FormationStatus settled, engine Ready</text>
   <text class="b" x="848" y="516">4  Snapshot restore, resume, instance Ready</text>
   <text class="b" x="848" y="542">5  Annotate db2u.fusion/restored=true</text>
-  <text class="b" x="848" y="568">6  Set target Project display name</text>
-  <text class="m" x="848" y="604">Transform runs on the restored objects</text>
+    <text class="m" x="848" y="604">Transform runs on the restored objects</text>
 
   <!-- arrows -->
   <path d="M352 470 H420" stroke="#198038" stroke-width="2" fill="none" marker-end="url(#arrGreen)"/>
