@@ -12,5 +12,5 @@
 /recipe/dslab-*
 
 **/*backup-secret*
-!examples/backup-secret.example.yaml
+!examples/configure/03-backup-secret.yaml
 **/*credentials*

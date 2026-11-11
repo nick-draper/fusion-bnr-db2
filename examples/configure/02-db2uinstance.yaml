@@ -1,14 +1,13 @@
 ---
-# Minimal Db2uInstance shape this recipe and the example Transform expect.
-# Replace the license and storage class before apply.
-# Paste the enterprise license text IBM issued to you. Do not commit it.
+# Minimal Db2uInstance shape this recipe and Transform expect.
+# Replace license and storage class before apply. Do not commit real license text.
 apiVersion: db2u.databases.ibm.com/v1
 kind: Db2uInstance
 metadata:
-  name: my-db2
-  namespace: db2u-prod
+  name: dwdb
+  namespace: dw-validation
   labels:
-    app.kubernetes.io/environment: prod
+    app.kubernetes.io/environment: validation
     for-backup: "true"
 spec:
   affinity:
@@ -19,7 +18,7 @@ spec:
               - key: environment
                 operator: In
                 values:
-                  - prod
+                  - validation
   license:
     accept: true
     value: REPLACE_WITH_DB2_LICENSE

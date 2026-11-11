@@ -1,18 +1,19 @@
 #!/bin/bash
-# Validate Fusion Backup & Restore setup, then a backup, then a cross-namespace restore.
+# Verify the dw-validation example before backup and after backup/restore.
 #
 # Usage (from the repository root):
-#   ./scripts/test-bnr.sh preflight
-#   ./scripts/test-bnr.sh backup
-#   ./scripts/test-bnr.sh restore
+#   ./scripts/test-bnr.sh before          # required config is ready; safe to back up
+#   ./scripts/test-bnr.sh after-backup    # newest Backup succeeded; source unlocked
+#   ./scripts/test-bnr.sh after-restore   # QA target looks restored; source still Ready
 #
-# preflight  objects exist, placeholders are gone, instance is Ready
-# backup     newest Backup succeeded and maintenance was cleared
-# restore    db2u-qa has the display name, restored annotation, and a Ready instance
+# Aliases: preflight=before, backup=after-backup, restore=after-restore
 
 set -euo pipefail
 
-ns=ibm-spectrum-fusion-ns
+fusion_ns=ibm-spectrum-fusion-ns
+src_ns=dw-validation
+tgt_ns=dw-validation-qa
+instance=dwdb
 mode=${1:-}
 
 fail() {
@@ -27,80 +28,85 @@ need() {
 phase_of() {
   local kind=$1 name=$2
   local phase
-  phase=$(oc get "${kind}" "${name}" -n "${ns}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+  phase=$(oc get "${kind}" "${name}" -n "${fusion_ns}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
   if [ -z "${phase}" ]; then
-    phase=$(oc get "${kind}" "${name}" -n "${ns}" -o jsonpath='{.status.status}' 2>/dev/null || true)
+    phase=$(oc get "${kind}" "${name}" -n "${fusion_ns}" -o jsonpath='{.status.status}' 2>/dev/null || true)
   fi
   printf '%s' "${phase}"
 }
 
 case "${mode}" in
-  preflight)
-    echo "Projects and operator"
-    oc get project db2u-prod db2u-qa >/dev/null || fail "db2u-prod or db2u-qa project is missing"
-    oc get pods -n db2-operator -l control-plane=db2u-operator-manager --no-headers | grep -q Running \
-      || fail "db2u-operator-manager is not Running in db2-operator"
+  before|preflight)
+    echo "=== before backup: required configure/ objects ==="
+    oc get project "${src_ns}" "${tgt_ns}" >/dev/null || fail "${src_ns} or ${tgt_ns} project is missing"
+    # The recipes never run in the operator namespace, but the operator must be
+    # up to act on the maintenance annotations.
+    oc get pods -A -l control-plane=db2u-operator-manager --no-headers | grep -q Running \
+      || fail "no Running db2u-operator-manager pod found"
 
-    echo "Fusion objects"
-    need secret db2u-backup-secret "${ns}"
-    need backupstoragelocation db2u-prod-backup-storage-location "${ns}"
-    need backuppolicy db2u-prod-backup-policy "${ns}"
-    need application db2u-prod "${ns}"
-    need policyassignment db2u-prod-policy-assignment "${ns}"
-    need recipe db2u-parent-recipe "${ns}"
-    need recipe db2u-instance-child-recipe "${ns}"
+    sa=system:serviceaccount:ibm-backup-restore:transaction-manager
+    oc auth can-i patch db2uinstances.db2u.databases.ibm.com -n "${src_ns}" --as="${sa}" >/dev/null \
+      || fail "transaction-manager cannot patch db2uinstances; run scripts/restore-pre-req.sh"
+    oc auth can-i patch db2uengines.db2u.databases.ibm.com -n "${src_ns}" --as="${sa}" >/dev/null \
+      || fail "transaction-manager cannot patch db2uengines; run scripts/restore-pre-req.sh"
+    oc auth can-i patch namespaces --as="${sa}" >/dev/null \
+      || fail "transaction-manager cannot patch namespaces; run scripts/restore-pre-req.sh"
 
-    echo "No placeholders left in the live secret or license"
-    access_key=$(oc get secret db2u-backup-secret -n "${ns}" -o jsonpath='{.data.access-key-id}' | base64 -d)
-    secret_key=$(oc get secret db2u-backup-secret -n "${ns}" -o jsonpath='{.data.secret-access-key}' | base64 -d)
+    need secret dw-validation-backup-secret "${fusion_ns}"
+    need backupstoragelocation dw-validation-backup-storage-location "${fusion_ns}"
+    need backuppolicy dw-validation-backup-policy "${fusion_ns}"
+    need application dw-validation "${fusion_ns}"
+    need policyassignment dw-validation-policy-assignment "${fusion_ns}"
+    need recipe db2u-parent-recipe "${fusion_ns}"
+    need recipe db2u-instance-child-recipe "${fusion_ns}"
+    need transform dw-validation-to-qa "${fusion_ns}"
+
+    access_key=$(oc get secret dw-validation-backup-secret -n "${fusion_ns}" -o jsonpath='{.data.access-key-id}' | base64 -d)
+    secret_key=$(oc get secret dw-validation-backup-secret -n "${fusion_ns}" -o jsonpath='{.data.secret-access-key}' | base64 -d)
     case "${access_key}${secret_key}" in
       *REPLACE_WITH_*) fail "backup secret still contains REPLACE_WITH_" ;;
     esac
-    lic=$(oc get db2uinstance my-db2 -n db2u-prod -o jsonpath='{.spec.license.value}')
+    lic=$(oc get db2uinstance "${instance}" -n "${src_ns}" -o jsonpath='{.spec.license.value}')
     case "${lic}" in
       ""|REPLACE_WITH_DB2_LICENSE) fail "Db2uInstance license is empty or still the placeholder" ;;
     esac
 
-    echo "Application does not include the operator namespace"
-    oc get application db2u-prod -n "${ns}" -o jsonpath='{.spec.includedNamespaces}' \
+    oc get application dw-validation -n "${fusion_ns}" -o jsonpath='{.spec.includedNamespaces}' \
       | grep -q 'db2-operator' && fail "application includes db2-operator"
-    oc get application db2u-prod -n "${ns}" -o jsonpath='{.spec.includedNamespaces}' \
-      | grep -q 'db2u-prod' || fail "application does not include db2u-prod"
+    oc get application dw-validation -n "${fusion_ns}" -o jsonpath='{.spec.includedNamespaces}' \
+      | grep -q "${src_ns}" || fail "application does not include ${src_ns}"
 
-    echo "Assignment names the parent recipe and is not runNow"
-    recipe=$(oc get policyassignment db2u-prod-policy-assignment -n "${ns}" -o jsonpath='{.spec.recipe.name}')
+    recipe=$(oc get policyassignment dw-validation-policy-assignment -n "${fusion_ns}" -o jsonpath='{.spec.recipe.name}')
     [ "${recipe}" = "db2u-parent-recipe" ] || fail "policy assignment recipe is '${recipe}'"
-    run_now=$(oc get policyassignment db2u-prod-policy-assignment -n "${ns}" -o jsonpath='{.spec.runNow}')
+    run_now=$(oc get policyassignment dw-validation-policy-assignment -n "${fusion_ns}" -o jsonpath='{.spec.runNow}')
     [ "${run_now}" = "false" ] || fail "runNow is '${run_now}', expected false until you choose to back up"
 
-    echo "Child recipe is linked to the parent"
-    oc get recipe db2u-instance-child-recipe -n "${ns}" \
+    oc get recipe db2u-instance-child-recipe -n "${fusion_ns}" \
       -o jsonpath='{.metadata.labels.dp\.isf\.ibm\.com/parent-recipe}' \
       | grep -qx 'db2u-parent-recipe' || fail "child recipe is not labeled for the parent"
 
-    echo "Instance is labeled and Ready"
-    oc get db2uinstance my-db2 -n db2u-prod -o jsonpath='{.metadata.labels.for-backup}' \
-      | grep -qx 'true' || fail "my-db2 is missing for-backup=true"
-    state=$(oc get db2uinstance my-db2 -n db2u-prod -o jsonpath='{.status.state}')
-    [ "${state}" = "Ready" ] || fail "my-db2 state is '${state}', expected Ready"
-    oc get pods -n db2u-prod -l name=dashmpp-head-0 --no-headers | grep -q Running \
-      || fail "dashmpp-head-0 is not Running"
+    oc get db2uinstance "${instance}" -n "${src_ns}" -o jsonpath='{.metadata.labels.for-backup}' \
+      | grep -qx 'true' || fail "${instance} is missing for-backup=true"
+    state=$(oc get db2uinstance "${instance}" -n "${src_ns}" -o jsonpath='{.status.state}')
+    [ "${state}" = "Ready" ] || fail "${instance} state is '${state}', expected Ready"
+    oc get pods -n "${src_ns}" -l name=dashmpp-head-0 --no-headers | grep -q Running \
+      || fail "dashmpp-head-0 is not Running in ${src_ns}"
 
-    loc=$(phase_of backupstoragelocation db2u-prod-backup-storage-location)
+    loc=$(phase_of backupstoragelocation dw-validation-backup-storage-location)
     echo "BackupStorageLocation phase: ${loc:-<empty>}"
     case "${loc}" in
       Connected|Available|Ready) ;;
-      "") fail "storage location has no phase yet; wait until Fusion connects, then re-run preflight" ;;
+      "") fail "storage location has no phase yet; wait, then re-run before" ;;
       *) fail "storage location phase is '${loc}'" ;;
     esac
-    echo "PASS preflight"
+    echo "PASS before — safe to start a backup (see examples/operate/README.md)"
     ;;
 
-  backup)
-    echo "Newest backup in ${ns}"
-    name=$(oc get backup -n "${ns}" --sort-by=.metadata.creationTimestamp \
+  after-backup|backup)
+    echo "=== after backup ==="
+    name=$(oc get backup -n "${fusion_ns}" --sort-by=.metadata.creationTimestamp \
       -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | awk 'NF { last=$0 } END { print last }')
-    [ -n "${name}" ] || fail "no Backup objects in ${ns}"
+    [ -n "${name}" ] || fail "no Backup objects in ${fusion_ns}"
     phase=$(phase_of backup "${name}")
     echo "${name} phase: ${phase:-<empty>}"
     case "${phase}" in
@@ -108,27 +114,32 @@ case "${mode}" in
       "") fail "backup ${name} has no phase yet" ;;
       *) fail "backup ${name} phase is '${phase}'" ;;
     esac
-    pause=$(oc get db2uinstance my-db2 -n db2u-prod -o jsonpath='{.metadata.annotations.db2u\.databases\.ibm\.com/maintenance-pause-reconcile}')
-    [ -z "${pause}" ] || fail "maintenance-pause-reconcile is still '${pause}'"
-    echo "PASS backup ${name}"
-    echo "Use this name in examples/db2u-restore-cross-namespace.example.yaml"
+    pause=$(oc get db2uinstance "${instance}" -n "${src_ns}" -o jsonpath='{.metadata.annotations.db2u\.databases\.ibm\.com/maintenance-pause-reconcile}')
+    [ -z "${pause}" ] || fail "maintenance-pause-reconcile is still '${pause}' on source"
+    echo "PASS after-backup ${name}"
+    echo "Put this name in examples/operate/restore-to-qa.yaml as spec.backup"
     ;;
 
-  restore)
-    echo "Target project display name"
-    display=$(oc get ns db2u-qa -o jsonpath='{.metadata.annotations.openshift\.io/display-name}')
-    [ "${display}" = "Db2 Warehouse (QA)" ] || fail "display name is '${display}'"
-    restored=$(oc get db2uinstance my-db2 -n db2u-qa -o jsonpath='{.metadata.annotations.db2u\.fusion/restored}')
+  after-restore|restore)
+    echo "=== after restore ==="
+    display=$(oc get ns "${tgt_ns}" -o jsonpath='{.metadata.annotations.openshift\.io/display-name}')
+    # ns-display-name writes fixed text. Anything else means its labelSelector
+    # variable was not substituted and the hook matched nothing.
+    [ "${display}" = "Db2 Warehouse (Restored)" ] || fail "display name is '${display}', expected Db2 Warehouse (Restored)"
+    restored=$(oc get db2uinstance "${instance}" -n "${tgt_ns}" -o jsonpath='{.metadata.annotations.db2u\.fusion/restored}')
     [ "${restored}" = "true" ] || fail "db2u.fusion/restored is '${restored}'"
-    state=$(oc get db2uinstance my-db2 -n db2u-qa -o jsonpath='{.status.state}')
+    state=$(oc get db2uinstance "${instance}" -n "${tgt_ns}" -o jsonpath='{.status.state}')
     [ "${state}" = "Ready" ] || fail "restored instance state is '${state}'"
-    src=$(oc get db2uinstance my-db2 -n db2u-prod -o jsonpath='{.status.state}')
+    src=$(oc get db2uinstance "${instance}" -n "${src_ns}" -o jsonpath='{.status.state}')
     [ "${src}" = "Ready" ] || fail "source instance state is '${src}'"
-    echo "PASS restore. Confirm the enterprise license in the target instance before you call this done."
+    echo "PASS after-restore. Confirm the enterprise license on ${tgt_ns}/${instance} yourself."
     ;;
 
   *)
-    echo "Usage: $0 preflight|backup|restore" >&2
+    echo "Usage: $0 before|after-backup|after-restore" >&2
+    echo "  before         required configure/ is ready (alias: preflight)" >&2
+    echo "  after-backup   newest Backup succeeded (alias: backup)" >&2
+    echo "  after-restore  QA target restored (alias: restore)" >&2
     exit 1
     ;;
 esac

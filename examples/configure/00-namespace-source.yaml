@@ -1,0 +1,9 @@
+---
+# Source project for the Db2uInstance that Fusion backs up.
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: dw-validation
+  annotations:
+    openshift.io/display-name: Db2 Warehouse (VALIDATION)
+    openshift.io/description: Source namespace for the dw-validation Db2uInstance backup example

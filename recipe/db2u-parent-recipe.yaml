@@ -1,16 +1,32 @@
 ---
-# Parent recipe: Db2u operator orchestration (Fusion 2.10+ Dynamic Recipe)
+# Parent recipe: Db2u orchestration (Fusion 2.10+ Dynamic Recipe)
 #
-# Owns cross-namespace operator hooks. Instance volumes, CRs, and
-# manage_snapshots hooks live in the child recipe.
+# Owns maintenance mode, restore ordering, and the target Project display
+# name. Instance volumes, CRs, and manage_snapshots hooks live in the child.
+#
+# Every hook runs in the instance namespace resolved from the
+# db2u-instances group. No hook names a fixed namespace, so a
+# restore needs no namespaceMapping entry beyond the instance namespace.
+# (A fixed hook namespace such as db2-operator makes the parent/child restore
+# loader fail with KeyError unless that namespace is also mapped.)
+#
+# Maintenance mode is set with annotation hooks. Fusion's transaction-manager
+# service account patches the Db2uInstance / Db2uEngine directly; the Db2u
+# operator reacts to the annotation. No exec into the operator pod, no curl,
+# no service-account token.
+#
+# Comments must not contain dollar-brace text: Fusion reads it as a recipe
+# variable.
 #
 # Prerequisites:
-#   - IBM Fusion Backup & Restore 2.10+
-#   - Db2u operator in a dedicated namespace (default: db2-operator)
+#   - IBM Fusion Backup & Restore 2.10+ (dynamic recipes, annotation hooks)
 #   - Db2 12.1.4+ recommended (db2u-velero-plugin preserves credentials/license)
+#   - rbac/transaction-manager-db2u.yaml applied (scripts/restore-pre-req.sh)
+#   - Db2uInstance labelled for-backup=true (scripts/backup-pre-req.sh)
 #
 # Customize:
-#   - Change hook namespace if your operator is not in db2-operator
+#   - Engine labelSelector if your formation is not db2wh
+#   - Display-name text in ns-display-name
 #   - Assign this recipe name on the PolicyAssignment / Restore
 apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
@@ -20,195 +36,126 @@ metadata:
 spec:
   appType: db2uinstance
 
+  groups:
+    # Variable anchor only. Supplies the GROUP namespace variable to the
+    # parent and child hooks. Not used in any workflow, so it backs up nothing.
+    #
+    # Keep it type: resource. A volume group here selects the same PVCs as the
+    # child's db2u-volumes group. Keep the name distinct from every child group,
+    # and point child hooks at this group too: when both recipes defined
+    # db2u-volumes, child hooks bound to the parent's group, and once the parent
+    # group was renamed, child references to db2u-volumes failed to resolve.
+    - name: db2u-instances
+      type: resource
+      disableTransform: false
+      includedResourceTypes:
+        - db2uinstances.db2u.databases.ibm.com
+
   hooks:
-    - name: db2u-operator-manager-exec
-      type: exec
-      namespace: db2-operator
-      selectResource: pod
-      labelSelector: control-plane=db2u-operator-manager
+    # Pause / resume Db2u reconcile on the Db2uInstance(s).
+    # Trailing '-' removes the annotation (same as the old null merge-patch).
+    - name: db2u-instance-maint
+      type: annotation
+      namespace: '${GROUP.db2u-instances.namespace}'
+      selectResource: db2u.databases.ibm.com/v1/db2uinstances
+      labelSelector: for-backup=true
       onError: fail
-      timeout: 120
+      timeout: 60
       ops:
-        # Pause Db2uInstance reconcile before snapshot; undo on failure
-        - name: maintenance-mode-on
-          container: manager
-          overwrite: false
+        - name: pause
+          annotations: db2u.databases.ibm.com/maintenance-pause-reconcile=true
+          overwrite: true
           onError: fail
-          inverseOp: maintenance-mode-off
-          command: |
-            set -e
-            ns='${GROUP.db2u-volumes.namespace}'
-            ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/${ns}/db2uinstances"
-
-            db2uinstances=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Accept: application/yaml' \
-                -k "${api}" \
-              | grep '^    name: ' \
-              | tr -d ' ' \
-              | cut -c 6-
-            )
-
-            for db2uinstance in ${db2uinstances}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Content-Type: application/merge-patch+json' \
-                -H 'Accept: application/json' \
-                -k "${api}/${db2uinstance}?fieldManager=kubectl-annotate" \
-                -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":"true"}}}'
-            done
-
-        - name: maintenance-mode-off
-          container: manager
-          overwrite: false
+          timeout: 60
+          inverseOp: unpause
+        - name: unpause
+          annotations: db2u.databases.ibm.com/maintenance-pause-reconcile-
+          overwrite: true
           onError: fail
-          command: |
-            set -e
-            ns='${GROUP.db2u-volumes.namespace}'
-            ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1/namespaces/${ns}/db2uinstances"
+          timeout: 60
 
-            db2uinstances=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Accept: application/yaml' \
-                -k "${api}" \
-              | grep '^    name: ' \
-              | tr -d ' ' \
-              | cut -c 6-
-            )
-
-            for db2uinstance in ${db2uinstances}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Content-Type: application/merge-patch+json' \
-                -H 'Accept: application/json' \
-                -k "${api}/${db2uinstance}?fieldManager=kubectl-annotate" \
-                -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":null}}}'
-            done
-
-        # Pause Db2uEngine reconcile before snapshot; undo on failure
-        - name: engine-maintenance-mode-on
-          container: manager
-          overwrite: false
+    # Pause / resume Db2u reconcile on the Db2uEngine(s)
+    - name: db2u-engine-maint
+      type: annotation
+      namespace: '${GROUP.db2u-instances.namespace}'
+      selectResource: db2u.databases.ibm.com/v1alpha1/db2uengines
+      labelSelector: 'type=engine,component=db2wh,formation_type=db2wh'
+      onError: fail
+      timeout: 60
+      ops:
+        - name: pause
+          annotations: db2u.databases.ibm.com/maintenance-pause-reconcile=true
+          overwrite: true
           onError: fail
-          inverseOp: engine-maintenance-mode-off
-          command: |
-            set -e
-            ns='${GROUP.db2u-volumes.namespace}'
-            ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/${ns}/db2uengines"
-
-            db2uengines=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Accept: application/yaml' \
-                -k "${api}" \
-              | grep '^    name: ' \
-              | tr -d ' ' \
-              | cut -c 6-
-            )
-
-            for db2uengine in ${db2uengines}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Content-Type: application/merge-patch+json' \
-                -H 'Accept: application/json' \
-                -k "${api}/${db2uengine}?fieldManager=kubectl-annotate" \
-                -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":"true"}}}'
-            done
-
-        - name: engine-maintenance-mode-off
-          container: manager
-          overwrite: false
+          timeout: 60
+          inverseOp: unpause
+        - name: unpause
+          annotations: db2u.databases.ibm.com/maintenance-pause-reconcile-
+          overwrite: true
           onError: fail
-          command: |
-            set -e
-            ns='${GROUP.db2u-volumes.namespace}'
-            ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-            api="https://kubernetes.default.svc/apis/db2u.databases.ibm.com/v1alpha1/namespaces/${ns}/db2uengines"
+          timeout: 60
 
-            db2uengines=$(
-              curl -X GET --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Accept: application/yaml' \
-                -k "${api}" \
-              | grep '^    name: ' \
-              | tr -d ' ' \
-              | cut -c 6-
-            )
-
-            for db2uengine in ${db2uengines}; do
-              curl -X PATCH --cacert "${ca}" \
-                -H "Authorization: Bearer ${token}" \
-                -H 'Content-Type: application/merge-patch+json' \
-                -H 'Accept: application/json' \
-                -k "${api}/${db2uengine}?fieldManager=kubectl-annotate" \
-                -d '{"metadata":{"annotations":{"db2u.databases.ibm.com/maintenance-pause-reconcile":null}}}'
-            done
-
-        # Allow operator/controllers to settle after CR restore before readiness checks
-        - name: sleep-after-restore
-          container: manager
-          overwrite: false
-          timeout: 300
-          command: |
-            sleep 300
-
-        # Restore reuses the source Project/namespace annotation for
-        # openshift.io/display-name. Patch the *target* namespace so the UI
-        # does not keep the backup/source display name.
-        #
-        # Display name is derived from the target namespace suffix after the
-        # last '-': dw-stg -> "Db2 Warehouse (STG)", *-qa -> "(QA)", etc.
-        # Namespace: ${GROUP.db2u-volumes.namespace} (honours namespaceMapping).
-        - name: set-display-name
-          container: manager
-          overwrite: false
-          timeout: 300
-          onError: fail
-          command: |
-            set -e
-            ns='${GROUP.db2u-volumes.namespace}'
-            # Suffix after final '-': dw-stg -> stg, my-app-qa -> qa
-            suffix="${ns##*-}"
-            env_label=$(printf '%s' "${suffix}" | tr '[:lower:]' '[:upper:]')
-            DISPLAY_NAME="Db2 Warehouse (${env_label})"
-
-            echo "Setting OpenShift project display-name for ${ns} -> ${DISPLAY_NAME}"
-
-            curl -X PATCH \
-              --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
-              -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
-              -H "Content-Type: application/merge-patch+json" \
-              "https://kubernetes.default.svc/api/v1/namespaces/${ns}?fieldManager=kubectl-annotate" \
-              -d "{\"metadata\":{\"annotations\":{\"openshift.io/display-name\":\"${DISPLAY_NAME}\"}}}"
-
-            echo 'Display-name patch complete'
+    # Restore can carry the source Project's openshift.io/display-name to the
+    # target. Overwrite it on the target namespace.
+    #
+    # Namespaces are cluster-scoped: no namespace field. The target is selected
+    # by its built-in kubernetes.io/metadata.name label.
+    #
+    # UNVERIFIED: IBM documents variable substitution only in hook namespace
+    # fields and exec commands. If Fusion does not substitute it in
+    # labelSelector, this hook matches nothing. onError: continue keeps a
+    # cosmetic miss from failing a good restore. Fallback: set the display
+    # name on the target Project manifest (examples/namespace-db2u-qa.yaml).
+    #
+    # An annotation hook writes fixed text, so the per-environment suffix
+    # (db2u-qa -> "Db2 Warehouse (QA)") is no longer derived here.
+    - name: ns-display-name
+      type: annotation
+      selectResource: namespaces
+      labelSelector: 'kubernetes.io/metadata.name=${GROUP.db2u-instances.namespace}'
+      onError: continue
+      timeout: 60
+      ops:
+        - name: set
+          annotations: openshift.io/display-name=Db2 Warehouse (Restored)
+          overwrite: true
+          onError: continue
+          timeout: 60
 
   workflows:
+    # Placeholders. The child supplies these sequences at priority 1000.
+    - name: instance-backup
+      failOn: any-error
+      priority: 0
+      sequence: []
+    - name: instance-restore-data
+      failOn: any-error
+      priority: 0
+      sequence: []
+    - name: instance-restore-post
+      failOn: any-error
+      priority: 0
+      sequence: []
+
     - name: backup
       failOn: any-error
       priority: 0
       sequence:
-        - hook: db2u-operator-manager-exec/maintenance-mode-on
-        - hook: db2u-operator-manager-exec/engine-maintenance-mode-on
+        - hook: db2u-instance-maint/pause
+        - hook: db2u-engine-maint/pause
         - workflow: instance-backup
-        - hook: db2u-operator-manager-exec/maintenance-mode-off
-        - hook: db2u-operator-manager-exec/engine-maintenance-mode-off
+        - hook: db2u-instance-maint/unpause
+        - hook: db2u-engine-maint/unpause
 
+    # The Db2uInstance is captured while paused, so it is restored paused.
+    # Unpause once data and resources are back, before the readiness checks
+    # and the Db2 snapshot restore, which need a reconciling operator.
     - name: restore
       failOn: any-error
       priority: 0
       sequence:
-        - hook: db2u-operator-manager-exec/set-display-name
-        - workflow: instance-restore
-        - hook: db2u-operator-manager-exec/sleep-after-restore
-        - hook: db2u-operator-manager-exec/maintenance-mode-off
-        - hook: db2u-operator-manager-exec/engine-maintenance-mode-off
+        - workflow: instance-restore-data
+        - hook: db2u-instance-maint/unpause
+        - hook: db2u-engine-maint/unpause
+        - workflow: instance-restore-post
+        - hook: ns-display-name/set
