@@ -1,6 +1,7 @@
 ---
-# Empty target project for cross-namespace restore. Create before restore.
-# This manifest owns the target display name; the recipes do not set it.
+# Empty target project for cross-namespace restore. Create before restore;
+# ns-display-name (parent recipe) overwrites openshift.io/display-name with
+# "Db2 Warehouse (Restored)" at the end of the restore.
 apiVersion: project.openshift.io/v1
 kind: Project
 metadata:

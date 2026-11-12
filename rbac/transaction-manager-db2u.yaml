@@ -3,6 +3,7 @@
 #
 #   db2uinstances, db2uengines  get/list for the check hooks; patch for the
 #                               maintenance-pause and restored annotation hooks
+#   namespaces                  patch for the ns-display-name annotation hook
 #
 # A dedicated ClusterRole (rather than patching Fusion's own
 # transaction-manager-ibm-backup-restore role) is idempotent and is not
@@ -10,6 +11,9 @@
 #
 # One binding covers every restore target: the service account lives in a
 # fixed namespace, so nothing here names an instance namespace.
+#
+# Security note: transaction-manager can patch metadata on any namespace.
+# Drop the namespaces rule if you set display names another way.
 #
 # Needed on every cluster that backs up (maintenance hooks) and every cluster
 # that restores.
@@ -23,6 +27,14 @@ rules:
     resources:
       - db2uinstances
       - db2uengines
+    verbs:
+      - get
+      - list
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
     verbs:
       - get
       - list

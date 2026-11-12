@@ -1,8 +1,8 @@
 ---
 # Parent recipe: Db2u orchestration (Fusion 2.10+ Dynamic Recipe)
 #
-# Owns maintenance mode and restore ordering. The target Project display
-# name comes from the target Project manifest, not the recipe. Instance volumes, CRs, and manage_snapshots hooks live in the child.
+# Owns maintenance mode, restore ordering, and the target Project display
+# name. Instance volumes, CRs, and manage_snapshots hooks live in the child.
 #
 # Every hook runs in the instance namespace resolved from the
 # db2u-instances group. No hook names a fixed namespace, so a
@@ -26,6 +26,7 @@
 #
 # Customize:
 #   - Engine labelSelector if your formation is not db2wh
+#   - Display-name text in ns-display-name
 #   - Assign this recipe name on the PolicyAssignment / Restore
 apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
@@ -94,6 +95,33 @@ spec:
           onError: fail
           timeout: 60
 
+    # Restore can carry the source Project's openshift.io/display-name to the
+    # target. Overwrite it on the target namespace.
+    #
+    # Namespaces are cluster-scoped: no namespace field. The target is selected
+    # by its built-in kubernetes.io/metadata.name label.
+    #
+    # UNVERIFIED: IBM documents variable substitution only in hook namespace
+    # fields and exec commands. If Fusion does not substitute it in
+    # labelSelector, this hook matches nothing. onError: continue keeps a
+    # cosmetic miss from failing a good restore. Fallback: set the display
+    # name on the target Project manifest (examples/namespace-db2u-qa.yaml).
+    #
+    # An annotation hook writes fixed text, so the per-environment suffix
+    # (db2u-qa -> "Db2 Warehouse (QA)") is no longer derived here.
+    - name: ns-display-name
+      type: annotation
+      selectResource: namespaces
+      labelSelector: 'kubernetes.io/metadata.name=${GROUP.db2u-instances.namespace}'
+      onError: continue
+      timeout: 60
+      ops:
+        - name: set
+          annotations: openshift.io/display-name=Db2 Warehouse (Restored)
+          overwrite: true
+          onError: continue
+          timeout: 60
+
   workflows:
     # Placeholders. The child supplies these sequences at priority 1000.
     - name: instance-backup
@@ -130,3 +158,4 @@ spec:
         - hook: db2u-instance-maint/unpause
         - hook: db2u-engine-maint/unpause
         - workflow: instance-restore-post
+        - hook: ns-display-name/set
