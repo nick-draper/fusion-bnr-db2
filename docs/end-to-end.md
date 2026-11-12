@@ -127,7 +127,7 @@ Pass: display name `Db2 Warehouse (Restored)`, annotation `db2u.fusion/restored=
 
 `ns-display-name` is an annotation hook, so it writes fixed text: `Db2 Warehouse (Restored)`. It cannot derive the old per-environment suffix (`dw-validation-qa` → `Db2 Warehouse (QA)`). For a per-environment name, keep it on the target Project manifest (`configure/01-namespace-target.yaml`) or in GitOps, and remove `ns-display-name/set` from the parent `restore` workflow.
 
-The hook selects the namespace by `kubernetes.io/metadata.name` using the GROUP variable. IBM documents variable substitution in hook namespaces and exec commands only; if the name does not change after a restore, the variable was not substituted there. The hook is `onError: continue`, so a miss does not fail the restore.
+The hook selects the namespace with `nameSelector: '${GROUP.db2u-instances.namespace}'` (and the same variable in `namespace`). Do not use `labelSelector` for this: Fusion does not substitute variables there, and recipe validation fails with `BMYBR0009 ... unable to parse requirement ... Invalid value`, rejecting the whole backup despite `onError: continue`.
 
 ---
 

@@ -115,7 +115,7 @@ Three things have to move together:
 2. A Transform whose JSON paths match your `Db2uInstance`. The example is a starting point, not a schema for every cluster.
 3. `ns-display-name` on the target project. It sets `Db2 Warehouse (Restored)`. An annotation hook writes fixed text, so the per-environment suffix (`dw-validation-qa` → `Db2 Warehouse (QA)`) that the old exec hook derived is gone. Keep a per-environment name on the target Project manifest ([`examples/configure/01-namespace-target.yaml`](examples/configure/01-namespace-target.yaml)) or in GitOps if you need it.
 
-The hook selects the namespace by `kubernetes.io/metadata.name` with the GROUP variable. IBM documents variable substitution in hook namespaces and exec commands, not in `labelSelector`, so confirm on your Fusion version that the display name changes. The hook is `onError: continue`, so a miss does not fail the restore.
+The hook selects the namespace with `nameSelector` set to the GROUP variable (and the same variable in `namespace`). Fusion substitutes variables there. It does **not** substitute them in `labelSelector`: a `kubernetes.io/metadata.name` label selector reaches the API server as literal text and fails recipe validation (`BMYBR0009`), rejecting the whole backup even with `onError: continue`.
 
 Create the target project before you apply the Restore.
 

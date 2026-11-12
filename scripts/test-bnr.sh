@@ -123,8 +123,8 @@ case "${mode}" in
   after-restore|restore)
     echo "=== after restore ==="
     display=$(oc get ns "${tgt_ns}" -o jsonpath='{.metadata.annotations.openshift\.io/display-name}')
-    # ns-display-name writes fixed text. Anything else means its labelSelector
-    # variable was not substituted and the hook matched nothing.
+    # ns-display-name writes fixed text. Anything else means the hook's
+    # nameSelector matched nothing.
     [ "${display}" = "Db2 Warehouse (Restored)" ] || fail "display name is '${display}', expected Db2 Warehouse (Restored)"
     restored=$(oc get db2uinstance "${instance}" -n "${tgt_ns}" -o jsonpath='{.metadata.annotations.db2u\.fusion/restored}')
     [ "${restored}" = "true" ] || fail "db2u.fusion/restored is '${restored}'"

@@ -98,21 +98,19 @@ spec:
     # Restore can carry the source Project's openshift.io/display-name to the
     # target. Overwrite it on the target namespace.
     #
-    # Namespaces are cluster-scoped: no namespace field. The target is selected
-    # by its built-in kubernetes.io/metadata.name label.
-    #
-    # UNVERIFIED: IBM documents variable substitution only in hook namespace
-    # fields and exec commands. If Fusion does not substitute it in
-    # labelSelector, this hook matches nothing. onError: continue keeps a
-    # cosmetic miss from failing a good restore. Fallback: set the display
-    # name on the target Project manifest (examples/namespace-db2u-qa.yaml).
+    # Select the Namespace by name with nameSelector, which Fusion substitutes
+    # with the GROUP variable. Do not use labelSelector: Fusion does not
+    # substitute variables there, and the literal text fails recipe validation
+    # (BMYBR0009, invalid label value) and rejects the whole backup.
+    # The namespace field is set to the same variable.
     #
     # An annotation hook writes fixed text, so the per-environment suffix
-    # (db2u-qa -> "Db2 Warehouse (QA)") is no longer derived here.
+    # (dw-validation-qa -> "Db2 Warehouse (QA)") is not derived here.
     - name: ns-display-name
       type: annotation
       selectResource: namespaces
-      labelSelector: 'kubernetes.io/metadata.name=${GROUP.db2u-instances.namespace}'
+      namespace: '${GROUP.db2u-instances.namespace}'
+      nameSelector: '${GROUP.db2u-instances.namespace}'
       onError: continue
       timeout: 60
       ops:
