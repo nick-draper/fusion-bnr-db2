@@ -18,13 +18,13 @@
   <!-- happy path -->
   <rect x="40" y="110" width="200" height="88" rx="12" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
   <text class="chip" x="56" y="138" fill="#0f62fe">PAUSE</text>
-  <text class="h" x="56" y="164">db2u-instance-maint</text>
-  <text class="m" x="56" y="184">pause · inverseOp: unpause</text>
+  <text class="h" x="56" y="164">Db2uInstance</text>
+  <text class="m" x="56" y="184">helper-exec · inverseOp: off</text>
 
   <rect x="300" y="110" width="200" height="88" rx="12" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
   <text class="chip" x="316" y="138" fill="#0f62fe">PAUSE</text>
-  <text class="h" x="316" y="164">db2u-engine-maint</text>
-  <text class="m" x="316" y="184">pause · inverseOp: unpause</text>
+  <text class="h" x="316" y="164">Db2uEngine</text>
+  <text class="m" x="316" y="184">helper-exec · inverseOp: off</text>
 
   <rect x="560" y="110" width="180" height="88" rx="12" fill="#fff8e1" stroke="#f1c21b" stroke-width="1.5"/>
   <text class="chip" x="576" y="138" fill="#8a6a00">QUIESCE</text>
@@ -56,14 +56,14 @@
   <text class="m" x="60" y="390">Writes are allowed again on dashmpp-head-0</text>
 
   <rect x="420" y="300" width="360" height="120" rx="12" fill="#fff1f1" stroke="#da1e28" stroke-width="1.5"/>
-  <text class="h" x="440" y="334">2  db2u-engine-maint/unpause</text>
+  <text class="h" x="440" y="334">2  engine-maintenance-mode-off</text>
   <text class="b" x="440" y="362">remove maintenance-pause-reconcile</text>
-  <text class="m" x="440" y="390">Db2uEngine reconcile continues</text>
+  <text class="m" x="440" y="390">Db2uEngine reconcile continues (helper pod)</text>
 
   <rect x="820" y="300" width="340" height="120" rx="12" fill="#fff1f1" stroke="#da1e28" stroke-width="1.5"/>
-  <text class="h" x="840" y="334">3  db2u-instance-maint/unpause</text>
-  <text class="b" x="840" y="362">remove the instance annotation</text>
-  <text class="m" x="840" y="390">Annotation hook, run by Fusion transaction-manager</text>
+  <text class="h" x="840" y="334">3  maintenance-mode-off</text>
+  <text class="b" x="840" y="362">remove maintenance-pause-reconcile</text>
+  <text class="m" x="840" y="390">Db2uInstance reconcile continues (helper pod)</text>
 
   <rect class="card" x="40" y="460" width="1120" height="140" rx="14"/>
   <text class="h" x="60" y="496">What this undo is, and what it is not</text>

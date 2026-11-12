@@ -64,7 +64,7 @@ spec:
         resources:
           requests:
             storage: 5Gi
-        storageClassName: dslab-block-file-delete-sc
+        storageClassName: isf-block-file-delete-sc
       type: create
     - name: data
       spec:
@@ -73,7 +73,7 @@ spec:
         resources:
           requests:
             storage: 10Gi
-        storageClassName: dslab-block-file-delete-sc
+        storageClassName: isf-block-file-delete-sc
       type: template
     - name: tempts
       spec:
@@ -82,7 +82,7 @@ spec:
         resources:
           requests:
             storage: 10Gi
-        storageClassName: dslab-block-file-delete-sc
+        storageClassName: isf-block-file-delete-sc
       type: template
   version: s12.1.4.0
 ...

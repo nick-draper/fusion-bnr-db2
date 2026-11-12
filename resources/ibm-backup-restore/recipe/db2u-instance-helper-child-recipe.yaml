@@ -2,8 +2,7 @@
 # Child recipe: Db2u instance namespace protection (tested on Fusion 2.12.2 Dynamic Recipe)
 #
 # Discovered by the parent via labels. Defines instance-scoped groups, hooks,
-# and the instance-backup / instance-restore-data / instance-restore-post
-# workflows the parent invokes.
+# and the instance-backup / instance-restore workflows the parent invokes.
 #
 # Hook namespaces resolve from the parent's db2u-db2uinstances anchor group,
 # which follows namespaceMapping on restore — do not hardcode the instance
@@ -123,7 +122,8 @@ spec:
         - group: db2u-volumes
         - hook: db2uinstances-pod-exec/resume
 
-    # Invoked from parent restore after maintenance is cleared
+    # Invoked from parent restore after the display name is set; the parent
+    # clears maintenance afterwards
     - name: instance-restore
       failOn: any-error
       priority: 1000

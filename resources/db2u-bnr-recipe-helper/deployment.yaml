@@ -6,6 +6,7 @@ metadata:
   namespace: db2u-bnr-recipe-helper
   labels:
     app: db2u-bnr-recipe-helper
+
 spec:
   replicas: 1
   selector:
@@ -23,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: helper
-          image: registry.dslab.defence.gov.au:8089/dslab-ubi/ubi9/ubi-minimal:9.4-1227.1726694542
+          image: my.registry/ubi9/ubi-minimal:9.4-1227.1726694542 #registry.access.redhat.com/ubi9/ubi-minimal:9.4-1227.1726694542
           command: ["/bin/bash", "-c", "sleep infinity"]
           env:
             - name: HOME

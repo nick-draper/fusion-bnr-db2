@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img">
   <title>Cross-namespace restore and transform</title>
-  <desc>A backup from the source namespace is restored into a new namespace. The Transform rewrites affinity and labels. The recipe sets the target Project display name with an annotation hook.</desc>
+  <desc>A backup from the source namespace is restored into a new namespace. The Transform rewrites affinity and labels. The recipe sets the target Project display name from the helper pod.</desc>
   <rect width="1200" height="560" rx="16" fill="#f4f7fb"/>
   <text x="40" y="48" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="22" font-weight="600">Transform on restore</text>
   <text x="40" y="72" fill="#525252" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Restore is not the backup played backwards. Source names and affinity stay stale unless you rewrite them.</text>
 
   <rect x="32" y="108" width="250" height="300" rx="14" fill="#ffffff" stroke="#d0d7e2" stroke-width="1.5"/>
   <text x="52" y="140" fill="#0f62fe" font-family="system-ui, Segoe UI, sans-serif" font-size="11" font-weight="600">SOURCE</text>
-  <text x="52" y="168" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">db2u-prod</text>
+  <text x="52" y="168" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">db2u-instance</text>
   <text x="52" y="204" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Db2uInstance</text>
   <text x="52" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">affinity: prod</text>
   <text x="52" y="252" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">environment: prod</text>
@@ -19,29 +19,29 @@
   <text x="350" y="140" fill="#8a3ffc" font-family="system-ui, Segoe UI, sans-serif" font-size="11" font-weight="600">FUSION OBJECTS</text>
   <text x="350" y="168" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">Backup</text>
   <text x="350" y="204" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">namespaceMapping</text>
-  <text x="350" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">db2u-prod to db2u-qa</text>
-  <text x="350" y="264" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">recipe: parent only</text>
-  <text x="350" y="300" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">transform: prod-to-qa</text>
+  <text x="350" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">db2u-instance to -dev</text>
+  <text x="350" y="264" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">helper ns to itself</text>
+  <text x="350" y="300" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">recipe: parent, transform: ENV</text>
   <text x="350" y="360" fill="#525252" font-family="system-ui, Segoe UI, sans-serif" font-size="12" font-weight="500">Child is discovered, not named</text>
 
   <rect x="628" y="108" width="250" height="300" rx="14" fill="#ffffff" stroke="#d0d7e2" stroke-width="1.5"/>
   <text x="648" y="140" fill="#8a3ffc" font-family="system-ui, Segoe UI, sans-serif" font-size="11" font-weight="600">JSON PATCH</text>
   <text x="648" y="168" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">Transform</text>
   <text x="648" y="204" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Db2uInstance name match</text>
-  <text x="648" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">affinity value to qa</text>
-  <text x="648" y="252" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">environment label to qa</text>
-  <text x="648" y="276" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">PVC labels to qa</text>
+  <text x="648" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">affinity value to ENV</text>
+  <text x="648" y="252" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">environment label to ENV</text>
+  <text x="648" y="276" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">add backup=restored</text>
   <text x="648" y="320" fill="#525252" font-family="system-ui, Segoe UI, sans-serif" font-size="12" font-weight="500">Edit paths to match your CR</text>
   <text x="648" y="342" fill="#525252" font-family="system-ui, Segoe UI, sans-serif" font-size="12" font-weight="500">Allow-list still applies</text>
 
   <rect x="926" y="108" width="242" height="300" rx="14" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
   <text x="946" y="140" fill="#198038" font-family="system-ui, Segoe UI, sans-serif" font-size="11" font-weight="600">TARGET</text>
-  <text x="946" y="168" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">db2u-qa</text>
+  <text x="946" y="168" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">db2u-instance-dev</text>
   <text x="946" y="204" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Project display name</text>
-  <text x="946" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">Db2 Warehouse (Restored)</text>
-  <text x="946" y="264" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">set by annotation hook</text>
-  <text x="946" y="288" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">per-env name: Project manifest</text>
-  <text x="946" y="324" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">annotation restored=true</text>
+  <text x="946" y="228" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">DB2U Instance (Restored)</text>
+  <text x="946" y="264" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">set by helper-exec hook</text>
+  <text x="946" y="288" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">overwrites the manifest name</text>
+  <text x="946" y="324" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">label backup=restored</text>
   <text x="946" y="368" fill="#525252" font-family="system-ui, Segoe UI, sans-serif" font-size="12" font-weight="500">Create the project first</text>
 
   <path d="M282 250 H330" stroke="#161616" stroke-width="2" fill="none" marker-end="url(#arrowDark)"/>
@@ -51,6 +51,7 @@
   <rect x="32" y="432" width="1136" height="96" rx="14" fill="#ffffff" stroke="#d0d7e2" stroke-width="1.5"/>
   <text x="52" y="468" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="600">Also required outside the Transform</text>
   <text x="52" y="496" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">db2u-velero-plugin on the DataProtectionApplication, or credentials and the enterprise license do not come back with the files.</text>
+  <text x="52" y="518" fill="#161616" font-family="system-ui, Segoe UI, sans-serif" font-size="13">The target in the Db2 OperatorGroup and namespace-scope ConfigMap, and worker nodes labelled for ENV.</text>
   <defs>
     <marker id="arrowDark" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#161616"/></marker>
     <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#198038"/></marker>

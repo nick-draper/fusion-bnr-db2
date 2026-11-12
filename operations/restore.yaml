@@ -7,7 +7,7 @@ metadata:
 spec:
   backup: db2u-instance-db2u-instance-backup-policy-apps.my.cluster-202611120622
   namespaceMapping:
-    dslab-db2u-recipe-helper: dslab-db2u-recipe-helper
+    db2u-bnr-recipe-helper: db2u-bnr-recipe-helper
     db2u-instance: db2u-instance-dev
   recipe:
     name: db2u-instance-helper-parent

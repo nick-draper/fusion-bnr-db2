@@ -1,4 +1,4 @@
-[![IBM Fusion](https://img.shields.io/badge/IBM%20Fusion-2.10%2B-0f62fe?logo=ibm&logoColor=white)](https://www.ibm.com/docs/en/fusion-software/2.12.0?topic=recipe-dynamic)
+[![IBM Fusion](https://img.shields.io/badge/IBM%20Fusion-tested%202.12.2-0f62fe?logo=ibm&logoColor=white)](https://www.ibm.com/docs/en/fusion-software/2.12.0?topic=recipe-dynamic)
 [![Db2uInstance](https://img.shields.io/badge/Db2uInstance-12.1.4%2B-0530ad)](https://github.com/IBM/storage-fusion/tree/master/backup-restore/recipes/Db2)
 [![Scope](https://img.shields.io/badge/scope-operator%20%E2%86%92%20instance%20split-0e6027)](docs/end-to-end.md)
 [![Last commit](https://img.shields.io/github/last-commit/nick-draper/fusion-bnr-db2)](https://github.com/nick-draper/fusion-bnr-db2/commits/main)
@@ -32,90 +32,94 @@ The manager pod is not there, so these hooks never run:
 
 Fusion still creates the Backup. The database is never placed in maintenance mode, and the snapshot is not taken. The failure is in the hook log, not in the Backup’s existence.
 
-The same README also limits restore to the **same** namespace. Promoting prod to QA, rebuilding a project, or recovering onto a spoke all need a different target, rewritten affinity and labels, and a Project display name that belongs to that target.
+The same README also limits restore to the **same** namespace. Promoting prod to dev or QA, rebuilding a project, or recovering onto a spoke all need a different target, rewritten affinity and labels, and a Project display name that belongs to that target.
 
 The parent recipe owns maintenance mode and restore ordering. The child owns the instance. A PolicyAssignment names only the parent. Fusion finds the child from its labels.
 
-No hook runs in the operator namespace. Maintenance mode is an annotation on the `Db2uInstance` and `Db2uEngine`, so the parent sets it with Fusion annotation hooks in the instance namespace, and the operator reacts to it wherever it runs.
+Maintenance mode is an annotation (`db2u.databases.ibm.com/maintenance-pause-reconcile`) on the `Db2uInstance` and `Db2uEngine`. The parent sets and clears it from a small **recipe helper** pod in its own namespace, `db2u-bnr-recipe-helper`. The helper calls the Kubernetes API with its own service account. The operator reacts to the annotation wherever it runs, and no hook runs in `db2-operator`.
 
-![Parent recipe calls the child. The instance namespace is the only thing backed up.](docs/images/architecture.svg)
+![Parent recipe calls the child. The helper pod patches the instance; only the instance namespace is backed up.](docs/images/architecture.svg)
 
 ## What changed from the sample
 
 | Gap in the sample | What this repository does |
-|-------------------|---------------------------|
-| Operator hooks run in the instance namespace | Annotation hooks pause and unpause the `Db2uInstance` and `Db2uEngine` directly. No hook runs in `db2-operator` |
-| Operator, subscriptions, and the database are one backup | The Application includes the instance namespace only |
+| --- | --- |
+| Operator hooks run in the instance namespace | Exec hooks in the `db2u-bnr-recipe-helper` pod patch the `Db2uInstance` and `Db2uEngine` through the API. No hook runs in `db2-operator` |
+| Operator, subscriptions, and the database are one backup | The Application is the instance namespace only (Fusion discovers it as `db2u-instance`) |
 | Exclude-list, then copy everything else | Allow-list: volumes, configmaps, secrets, `Db2uInstance` |
 | No undo if the snapshot fails after suspend | `inverseOp` resumes I/O and clears maintenance |
 | Same-namespace restore only | Transform, `namespaceMapping`, and a Restore example |
-| Target Project keeps the source display name | `ns-display-name` sets `Db2 Warehouse (Restored)` on the target namespace |
-| One flat recipe | Fusion 2.10 parent/child. The assignment names the parent |
-| Readiness is only `state == Ready` | The instance check also requires `FormationStatus == OK` |
-| Nothing marks a restored database | Annotation `db2u.fusion/restored=true` |
+| Target Project keeps the source display name | `helper-exec/set-display-name` sets `DB2U Instance (Restored)` on the target namespace |
+| One flat recipe | Fusion parent/child dynamic recipe. The assignment names the parent |
+| Nothing marks a restored database | The Transform adds label `backup=restored` to the restored `Db2uInstance` |
 
-Two scripts from IBM’s folder are still required, and they are limited to `Db2uInstance`:
-
-- [`scripts/backup-pre-req.sh`](scripts/backup-pre-req.sh) sets `for-backup=true`. The readiness check selects on that label. Without it, restore waits until timeout.
-- [`scripts/restore-pre-req.sh`](scripts/restore-pre-req.sh) applies [`rbac/transaction-manager-db2u.yaml`](rbac/transaction-manager-db2u.yaml): `get`, `list`, and `patch` on `db2uinstances`, `db2uengines`, and `namespaces` for Fusion’s transaction-manager. Every annotation hook runs as that account, so run it on every cluster that backs up **and** every cluster that restores. Without it the hooks fail with Forbidden.
+[`scripts/configure-recipe-helper.sh`](scripts/configure-recipe-helper.sh) deploys the helper and its ClusterRole and checks the permissions. Run it on every cluster that backs up **and** every cluster that restores. Without it the helper hooks fail with Forbidden. The `Db2uInstance` must carry `for-backup=true`: the readiness check selects on it. The sample manifest sets it; [`scripts/backup-pre-req.sh`](scripts/backup-pre-req.sh) adds it to instances created without it.
 
 ## How backup and restore run
 
-Fusion 2.10 builds one workflow from a parent plus a child. The parent does not name the instance namespace. Every hook uses `${GROUP.db2u-instances.namespace}`, from a resource-type anchor group in the parent, which follows `namespaceMapping` on restore.
+Fusion builds one workflow from a parent plus a child. Every instance hook uses `${GROUP.db2u-db2uinstances.namespace}`, from a resource-type anchor group in the parent, which follows `namespaceMapping` on restore.
 
+```text
+backup:  pause instance → pause engine → instance-backup → unpause engine → unpause instance
+restore: set target display name → instance-restore → wait 300 s
+         → unpause engine → unpause instance
+
+instance-backup:  resources → Db2uInstance → suspend → volumes → resume
+instance-restore: volumes → resources → Db2uInstance → engine Ready
+                  → snapshot restore → resume → instance Ready
 ```
-backup:  pause instance → pause engine → instance-backup → unpause instance → unpause engine
-restore: instance-restore-data → unpause instance → unpause engine
-         → instance-restore-post → set target display name
 
-instance-backup:       resources → Db2uInstance → suspend → volumes → resume
-instance-restore-data: volumes → resources → Db2uInstance
-instance-restore-post: formation settled → engine Ready → snapshot restore → resume
-                       → instance Ready → annotate db2u.fusion/restored=true
-```
-
-The `Db2uInstance` is backed up while paused, so it comes back paused. Restore unpauses it once the data is back and before the readiness checks, which need a reconciling operator. A `settled` check on `FormationStatus` replaces the fixed 300 s sleep.
+The `Db2uInstance` is backed up while paused, so it comes back paused. The parent clears maintenance at the end of the restore, after the child’s readiness checks and a 300 s settle.
 
 The child carries:
 
 ```yaml
-dp.isf.ibm.com/parent-recipe: db2u-parent-recipe
+dp.isf.ibm.com/parent-recipe: db2u-instance-helper-parent
 dp.isf.ibm.com/parent-recipe-namespace: ibm-spectrum-fusion-ns
 ```
 
 Groups use `includedResourceTypes`. The sample uses an exclude list and then backs up whatever remains, which pulls operator and OLM objects into the backup when they share the namespace. An allow-list leaves a new type out until you add it. Run [`scripts/discover-instance-resources.sh`](scripts/discover-instance-resources.sh) against a real instance namespace before you widen the list.
 
-`manage_snapshots` runs in container `db2u` on pod `dashmpp-head-0`. That stays an exec hook, in the JSON-array form (`["/bin/bash", "-c", "manage_snapshots --action suspend --retry 3"]`); the multi-line shell form did not run on the cluster. A Job hook starts another pod, with another image and identity, and cannot see the binary.
+`manage_snapshots` runs in container `db2u` on pod `dashmpp-head-0`. That stays an exec hook, in the JSON-array form (`["/bin/bash", "-c", "manage_snapshots --action suspend --retry 3"]`); the multi-line shell form did not run there. A Job hook starts another pod, with another image and identity, and cannot see the binary.
 
 Fusion reads any dollar-brace text in a recipe as a variable, including in comments. Keep it out of comments, and use `$name` without braces for shell variables in commands.
 
-### Why there is no hook in `db2-operator`
+### Why a helper pod
 
 Earlier versions ran the maintenance patches as `curl` exec hooks inside the operator manager pod, in `db2-operator`. Backup worked. A cross-namespace restore failed while Fusion was still building the restore recipe:
 
-```
+```text
 recipeloader.py ... in _create_from_spec
 KeyError: 'db2-operator'
 Required parameters missing for restore 'db2-operator'
 ```
 
-The traceback points at the parent/child restore loader looking up each **fixed** hook namespace in the Restore’s `namespaceMapping`. `db2-operator` is not an application namespace, so the lookup fails. That reads as a Fusion defect rather than deliberate validation. Hooks whose namespace resolves from an application group are unaffected. Adding `db2-operator: db2-operator` to every Restore works around it, but every restore then depends on someone remembering it.
+The parent/child restore loader looks up each **fixed** hook namespace in the Restore’s `namespaceMapping`. Fusion annotation hooks in the instance namespace avoided the fixed namespace, but during restore the `GROUP` variable did not resolve in the dynamic recipe, so they could not be used.
 
-Annotation hooks remove the problem: Fusion patches the `maintenance-pause-reconcile` annotation itself, in the instance namespace, which is exactly what the `curl` did. No exec into the operator pod, no service-account token, no fixed namespace.
+The helper is the compromise. It is a minimal UBI pod with `curl`, its own service account, and a ClusterRole limited to the Db2u objects and namespaces. The hooks no longer depend on the operator pod’s image or token. Its namespace is still fixed, so **every Restore maps it to itself**:
 
-Assign `db2u-parent-recipe` on the PolicyAssignment **before the first backup**. A backup taken with no recipe has no quiesce and no resource order, and a later restore cannot invent them. See [I didn’t use a recipe on backup](https://community.ibm.com/community/user/blogs/jim-smith/2024/03/13/fusion-recipe-tips-no-backup-recipe).
+```yaml
+namespaceMapping:
+  db2u-bnr-recipe-helper: db2u-bnr-recipe-helper
+  db2u-instance: db2u-instance-dev
+```
+
+Leave that line out and the restore fails with `KeyError: 'db2u-bnr-recipe-helper'`. [`operations/restore.yaml`](operations/restore.yaml) carries it.
+
+Assign `db2u-instance-helper-parent` on the PolicyAssignment **before the first backup**. A backup taken with no recipe has no quiesce and no resource order, and a later restore cannot invent them. See [I didn’t use a recipe on backup](https://community.ibm.com/community/user/blogs/jim-smith/2024/03/13/fusion-recipe-tips-no-backup-recipe).
 
 ## Restoring into another namespace
 
-A backup taken in namespace A does not apply unchanged in namespace C. Affinity still says prod. Labels still name the source environment. The OpenShift Project keeps the source `openshift.io/display-name`, so the console shows the backed-up environment on the target. The sample ships no Transform. Restores failed here more often than they failed in the backup hooks, including instances that returned and then sat in maintenance shutdown because those references were still the source values.
+A backup taken in namespace A does not apply unchanged in namespace C. Affinity still says prod. Labels still name the source environment. The OpenShift Project keeps the source `openshift.io/display-name`. The sample ships no Transform. Restores failed here more often than they failed in the backup hooks, including instances that returned and then sat in maintenance shutdown because those references were still the source values.
 
-Three things have to move together:
+Four things have to move together:
 
-1. `namespaceMapping` on the Restore (`dw-validation` to `dw-validation-qa` in the example).
-2. A Transform whose JSON paths match your `Db2uInstance`. The example is a starting point, not a schema for every cluster.
-3. `ns-display-name` on the target project. It sets `Db2 Warehouse (Restored)`. An annotation hook writes fixed text, so the per-environment suffix (`dw-validation-qa` → `Db2 Warehouse (QA)`) that the old exec hook derived is gone. Keep a per-environment name on the target Project manifest ([`examples/configure/01-namespace-target.yaml`](examples/configure/01-namespace-target.yaml)) or in GitOps if you need it.
+1. `namespaceMapping` on the Restore: the instance (`db2u-instance` to `db2u-instance-dev`) and the helper namespace to itself.
+2. A Transform whose JSON paths match your `Db2uInstance`. [`transform.yaml`](resources/ibm-backup-restore/recipe/transform.yaml) rewrites the affinity value and the `my.cluster/environment` label to `${ENV}` (set by `transformMapping` on the Restore) and adds `backup=restored`. It is a starting point, not a schema for every cluster.
+3. The Db2u operator must watch the target. Add it to the OperatorGroup and `namespace-scope` ConfigMap in `db2-operator` before you restore, or nothing reconciles the restored instance.
+4. Worker nodes labelled for the target environment (`my.cluster/environment=dev`), or the rewritten affinity cannot schedule.
 
-The hook selects the namespace with `nameSelector` set to the GROUP variable (and the same variable in `namespace`). Fusion substitutes variables there. It does **not** substitute them in `labelSelector`: a `kubernetes.io/metadata.name` label selector reaches the API server as literal text and fails recipe validation (`BMYBR0009`), rejecting the whole backup even with `onError: continue`.
+`set-display-name` writes `DB2U Instance (Restored)` over whatever display name the target Project manifest set.
 
 Create the target project before you apply the Restore.
 
@@ -149,47 +153,39 @@ While implementing this we also saw a Restore timeout followed by deletion of th
 
 ## Put it on a cluster
 
-Worked example namespaces: **`dw-validation`** (source) → **`dw-validation-qa`** (restore target).
+Worked example namespaces: **`db2u-instance`** (source) → **`db2u-instance-dev`** (restore target).
 
-You need Fusion Backup & Restore **2.10 or newer**, a Db2u operator in its own namespace, a `Db2uInstance` on Db2 **12.1.4 or newer**, the Velero plugin on the Fusion DataProtectionApplication, and `oc` and `jq` on the workstation.
+You need Fusion Backup & Restore **2.10 or newer** (tested on 2.12.2), a Db2u operator in its own namespace, a `Db2uInstance` on Db2 **12.1.4 or newer**, the Velero plugin on the Fusion DataProtectionApplication, S3-compatible object storage, and `oc` on the workstation.
 
-![Order of operations from the plugin through a cross-namespace restore.](docs/images/deploy.svg)
+![Order of operations from object storage through a cross-namespace restore.](docs/images/deploy.svg)
 
-| Folder | Meaning |
-|--------|---------|
-| [`examples/configure/`](examples/configure/) | **Required** Fusion BNR application setup (projects, instance, storage, policy, Application, assignment, Transform) |
-| [`examples/operate/`](examples/operate/) | **Operational** Restore CR — backups are started from the UI / API |
-| [`scripts/`](scripts/) | `configure-bnr.sh`, then `test-bnr.sh before` / `after-backup` / `after-restore` |
+| Step | Guide | Files |
+| --- | --- | --- |
+| 1. Object storage: bucket, policy, user, access key | [docs/object-storage-setup.md](docs/object-storage-setup.md) | none (done on the storage side) |
+| 2. Db2 operator scope, projects, instance | [end-to-end §2](docs/end-to-end.md#2-db2-operator-projects-and-instance) | [`resources/db2u-instance/`](resources/db2u-instance/) |
+| 3. Fusion BNR: Velero plugin, storage location, policy, recipes, transform, assignment | [end-to-end §3](docs/end-to-end.md#3-ibm-fusion-backup--restore) | [`resources/ibm-backup-restore/`](resources/ibm-backup-restore/) |
+| 4. Recipe helper | [end-to-end §4](docs/end-to-end.md#4-recipe-helper) | [`resources/db2u-bnr-recipe-helper/`](resources/db2u-bnr-recipe-helper/) |
+| 5. Operations: backup and restore | [docs/operations.md](docs/operations.md) | [`operations/`](operations/) |
 
-Replace `REPLACE_WITH_` under `examples/configure/`, then:
+Fill the `<...>` placeholders, then:
 
 ```bash
-./scripts/configure-bnr.sh
+./scripts/configure-bnr.sh          # steps 2-4
 ./scripts/test-bnr.sh before
-# start a backup from Fusion UI — see examples/operate/README.md
+# back up: Fusion UI or operations/backup.yaml
 ./scripts/test-bnr.sh after-backup
-# edit examples/operate/restore-to-qa.yaml with the Backup name, apply it
+# set spec.backup in operations/restore.yaml, apply it
 ./scripts/test-bnr.sh after-restore
 ```
 
-Full sequence: [docs/end-to-end.md](docs/end-to-end.md). Pack overview: [examples/README.md](examples/README.md).
-
-| Path | Role |
-|------|------|
-| [docs/end-to-end.md](docs/end-to-end.md) | Deploy, backup, restore, and what to check |
-| [recipe/db2u-parent-recipe.yaml](recipe/db2u-parent-recipe.yaml) | Maintenance annotation hooks, display name, workflow order |
-| [rbac/transaction-manager-db2u.yaml](rbac/transaction-manager-db2u.yaml) | What Fusion’s transaction-manager needs for the annotation and check hooks |
-| [recipe/db2u-instance-child-recipe.yaml](recipe/db2u-instance-child-recipe.yaml) | Volumes, secrets, instance, quiesce, readiness |
-| [examples/configure/](examples/configure/) | Required configuration for `dw-validation` |
-| [examples/operate/](examples/operate/) | Restore operation CR |
-| [scripts/](scripts/) | Configure, then verify before / after backup / after restore |
+File index: [resources/README.md](resources/README.md).
 
 ## Out of scope
 
 - `Db2uCluster`
 - Backing up the operator, OLM subscriptions, or cluster-scoped objects
 - Job hooks, and parallel children. Parallel execution only helps when one Application covers several instances and every parallel sequence is hooks only. A volume group forces sequential execution.
-- Real object-storage keys and the Db2 license. The examples leave those as `REPLACE_WITH_` placeholders
+- Real object-storage keys and the Db2 license. The manifests leave those as `<...>` placeholders
 
 ## Further reading
 

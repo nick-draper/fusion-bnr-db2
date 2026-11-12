@@ -11,7 +11,7 @@ spec:
           path: /spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values/0
           value: '${ENV}'
         - op: replace
-          path: /metadata/labels/dslab.defence.gov.au~1environment
+          path: /metadata/labels/my.cluster~1environment #intenional inconsistency to avoid yaml parsing issues
           value: '${ENV}'
         - op: add
           path: /metadata/labels/backup
@@ -22,7 +22,7 @@ spec:
         resourceNameRegex: dwdb
     - json:
         - op: replace
-          path: /metadata/labels/dslab.defence.gov.au/environment
+          path: /metadata/labels/my.cluster/environment #intenional inconsistency to avoid yaml parsing issues
           value: '${ENV}'
         - op: replace
           path: /metadata/labels/backup

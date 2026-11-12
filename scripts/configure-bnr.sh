@@ -1,10 +1,17 @@
 #!/bin/bash
-# Apply required Fusion BNR configuration for the dw-validation example.
+# Apply steps 2-4 of docs/end-to-end.md from resources/.
 #
-# Edit placeholders in examples/configure/ before you run:
-#   02-db2uinstance.yaml
-#   03-backup-secret.yaml
-#   04-backup-storage-location.yaml
+# Do these first (the script checks them, it does not do them):
+#   - Step 1: bucket, policy, user and access key (docs/object-storage-setup.md)
+#   - Fill placeholders:
+#       resources/db2u-instance/db2u-instance.yaml            <Insert License>, <storage-class>
+#       resources/ibm-backup-restore/backup-storage-location/secret.yaml
+#                                                             <access-key-id>, <secret-access-key>
+#   - Edit the existing OperatorGroup and namespace-scope ConfigMap in
+#     db2-operator so they list the instance and every restore target
+#   - Create the object storage CA secret minio-registry-cert-secret in
+#     ibm-spectrum-fusion-ns
+#   - Install db2u-velero-plugin on the Fusion DPA
 #
 # Usage (from the repository root):
 #   ./scripts/configure-bnr.sh
@@ -15,43 +22,58 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "${root}"
 
 fusion_ns=ibm-spectrum-fusion-ns
-src_ns=dw-validation
-cfg=examples/configure
+op_ns=db2-operator
+src_ns=db2u-instance
+tgt_ns=db2u-instance-dev
+r=resources
+bnr=${r}/ibm-backup-restore
 
-echo "Checking placeholders in configure/"
-if grep -n "REPLACE_WITH_" \
-  "${cfg}/02-db2uinstance.yaml" \
-  "${cfg}/03-backup-secret.yaml" \
-  "${cfg}/04-backup-storage-location.yaml"
-then
-  echo "Replace every REPLACE_WITH_ value in examples/configure/, then run again."
+fail() {
+  echo "FAIL: $*" >&2
   exit 1
+}
+
+echo "Checking placeholders"
+if grep -nE '<(Insert License|storage-class|access-key-id|secret-access-key)>' \
+  "${r}/db2u-instance/db2u-instance.yaml" \
+  "${bnr}/backup-storage-location/secret.yaml"
+then
+  fail "replace every <...> placeholder above, then run again"
 fi
 
-echo "1/3 Projects and Db2uInstance"
-oc apply -f "${cfg}/00-namespace-source.yaml"
-oc apply -f "${cfg}/01-namespace-target.yaml"
-oc apply -f "${cfg}/02-db2uinstance.yaml"
+echo "Checking manual prerequisites"
+oc get secret minio-registry-cert-secret -n "${fusion_ns}" >/dev/null 2>&1 \
+  || fail "secret minio-registry-cert-secret is missing in ${fusion_ns}"
+og=$(oc get operatorgroup -n "${op_ns}" -o jsonpath='{.items[*].spec.targetNamespaces}')
+scope=$(oc get configmap namespace-scope -n "${op_ns}" -o jsonpath='{.data.namespaces}' 2>/dev/null || true)
+for ns in "${src_ns}" "${tgt_ns}"; do
+  grep -q "\"${ns}\"" <<<"${og}" || fail "OperatorGroup in ${op_ns} does not target ${ns}"
+  grep -qE "(^|,)${ns}(,|$)" <<<"${scope}" || fail "namespace-scope ConfigMap in ${op_ns} does not list ${ns}"
+done
+oc get dpa velero -n ibm-backup-restore -o jsonpath='{.spec.configuration.velero.customPlugins}' \
+  | grep -q db2u || echo "WARN: db2u-velero-plugin not found on the Fusion DPA (see ${bnr}/config/)"
 
-echo "2/3 Fusion BNR application objects + recipes"
-oc apply -f "${cfg}/03-backup-secret.yaml"
-oc apply -f "${cfg}/04-backup-storage-location.yaml"
-oc apply -f "${cfg}/05-backup-policy.yaml"
-oc apply -f recipe/db2u-parent-recipe.yaml
-oc apply -f recipe/db2u-instance-child-recipe.yaml
-oc apply -f "${cfg}/06-application.yaml"
-oc apply -f "${cfg}/07-policy-assignment.yaml"
-oc apply -f "${cfg}/08-transform.yaml"
+echo "2/4 Projects and Db2uInstance"
+oc apply -f "${r}/db2u-instance/db2u-instance-project.yaml"
+oc apply -f "${r}/db2u-instance/db2u-instance-dev-project.yaml"
+oc apply -f "${r}/db2u-instance/db2u-instance.yaml"
 
-echo "3/3 ClusterRole and for-backup label"
-"${root}/scripts/restore-pre-req.sh"
-"${root}/scripts/backup-pre-req.sh" "${src_ns}"
+echo "3/4 Fusion BNR storage, policy, recipes, transform, assignment"
+oc apply -f "${bnr}/backup-storage-location/secret.yaml"
+oc apply -f "${bnr}/backup-storage-location/backup-storage-location.yaml"
+oc apply -f "${bnr}/backup-storage-location/backup-policy.yaml"
+oc apply -f "${bnr}/recipe/db2u-instance-helper-parent-recipe.yaml"
+oc apply -f "${bnr}/recipe/db2u-instance-helper-child-recipe.yaml"
+oc apply -f "${bnr}/recipe/transform.yaml"
+oc apply -f "${bnr}/recipe/policy-assignment.yaml"
 
-echo "Configured for ${src_ns}."
+echo "4/4 Recipe helper"
+"${root}/scripts/configure-recipe-helper.sh"
+
+echo "Configured ${src_ns} (restore target ${tgt_ns})."
 echo "Next:"
 echo "  ./scripts/test-bnr.sh before"
-echo "  (start a backup from the Fusion UI — see examples/operate/README.md)"
+echo "  back up (Fusion UI or operations/backup.yaml, see docs/operations.md)"
 echo "  ./scripts/test-bnr.sh after-backup"
-echo "  edit + apply examples/operate/restore-to-qa.yaml"
+echo "  edit + apply operations/restore.yaml"
 echo "  ./scripts/test-bnr.sh after-restore"
-echo "PolicyAssignment: oc get policyassignment dw-validation-policy-assignment -n ${fusion_ns}"

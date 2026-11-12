@@ -2,13 +2,15 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: db2u-recipe-helper
+  name: db2u-bnr-recipe-helper
+
 subjects:
   - kind: ServiceAccount
-    name: db2u-recipe-helper
-    namespace: db2u-isntance-recipe-helper
+    name: db2u-bnr-recipe-helper
+    namespace: db2u-bnr-recipe-helper
+
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: dslab-db2u-recipe-helper
+  name: db2u-bnr-recipe-helper
 ...
