@@ -10,7 +10,7 @@ IBM reference: [Resource transformation](https://www.ibm.com/docs/en/fusion-soft
 
 | File | What it shows | Tested |
 | --- | --- | --- |
-| [`../recipes/Db2/db2u-instance-helper/db2u-instance-restore-transform.yaml`](../recipes/Db2/db2u-instance-helper/db2u-instance-restore-transform.yaml) | Db2uInstance prod to dev: affinity, environment label, restored marker | `update-db2uinstance`: yes, Fusion 2.12.2. `update-pvcs`: corrected after testing, not yet re-run |
+| [`../recipes/Db2/db2u-instance-helper/db2u-instance-restore-transform.yaml`](../recipes/Db2/db2u-instance-helper/db2u-instance-restore-transform.yaml) | Db2uInstance prod to dev: affinity, environment label, restored marker | Yes, Fusion 2.12.2 |
 | [`transform-namespace-promotion.yaml`](transform-namespace-promotion.yaml) | Labels, node placement, route host and a marker for an environment promotion | No |
 | [`transform-storage-class-migration.yaml`](transform-storage-class-migration.yaml) | PVCs onto other storage classes, one guarded rule per class | No |
 | [`transform-config-and-secrets.yaml`](transform-config-and-secrets.yaml) | Values inside ConfigMap and Secret data with string and merge patches | No |
@@ -66,7 +66,7 @@ Don't select on a label that another rule rewrites. The order Fusion applies rul
 
 These are RFC 6901 and 6902 rules. A mistake doesn't always show as a failed restore. The rule can stop, the resource comes back unchanged, and you only notice later.
 
-1. **Write `/` in a key as `~1`** (and `~` as `~0`). The label `my.cluster/environment` is `/metadata/labels/my.cluster~1environment`. Written as `/metadata/labels/my.cluster/environment`, the path means a label `my.cluster` containing a field `environment`, which doesn't exist.
+1. **`/` in a key: the standard is `~1`, but check what Fusion does.** RFC 6901 writes `/` inside a key as `~1` (and `~` as `~0`), so the label `my.cluster/environment` is `/metadata/labels/my.cluster~1environment`. Fusion's processing of JSON patch didn't follow that consistently in our testing. The tested Db2 transform deliberately uses `~1` for the `Db2uInstance` label and the unescaped form for the PVC label. For a label key containing `/`, confirm the result on a test restore rather than relying on the standard.
 2. **`replace` and `remove` need the path to exist.** To set a label that may be missing, use `add`.
 3. **`add` on a key sets that key. `add` on the map replaces the map.** `add /metadata/labels/backup` adds one label. `add /metadata/labels` with an object drops every label that was there.
 4. **`add` needs the parent to exist.** `/metadata/annotations/x` fails on an object with no annotations at all.
