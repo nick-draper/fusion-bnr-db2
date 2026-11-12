@@ -1,7 +1,7 @@
 #!/bin/bash
 # Verify the db2u-instance example before backup and after backup/restore.
 #
-# Usage (from the repository root):
+# Usage (from backup-restore/recipes/Db2/db2u-instance-helper/):
 #   ./scripts/test-bnr.sh before          # required config is ready; safe to back up
 #   ./scripts/test-bnr.sh after-backup    # newest Backup succeeded; source unlocked
 #   ./scripts/test-bnr.sh after-restore   # target looks restored; source still Ready
@@ -139,7 +139,7 @@ case "${mode}" in
     esac
     unpaused "${src_ns}"
     echo "PASS after-backup ${name}"
-    echo "Restores use the backup name shown in the Fusion UI (see docs/operations.md) as spec.backup in operations/restore.yaml"
+    echo "Restores use the backup name shown in the Fusion UI (see docs/operations.md) as spec.backup in examples/operations/restore.yaml"
     ;;
 
   after-restore|restore)

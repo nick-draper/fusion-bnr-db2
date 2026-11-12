@@ -65,10 +65,10 @@ Record the access key and secret key. The secret key is shown once.
 
 | Value | File | Field |
 | --- | --- | --- |
-| Bucket | [`backup-storage-location.yaml`](../resources/ibm-backup-restore/backup-storage-location/backup-storage-location.yaml) | `spec.params.bucket` |
+| Bucket | [`backup-storage-location.yaml`](../examples/ibm-backup-restore/backup-storage-location/backup-storage-location.yaml) | `spec.params.bucket` |
 | Endpoint URL | same | `spec.params.endpoint` |
 | Endpoint CA certificate | secret `minio-registry-cert-secret` in `ibm-spectrum-fusion-ns` | `spec.privateCertificateName` |
-| Access key | [`secret.yaml`](../resources/ibm-backup-restore/backup-storage-location/secret.yaml) | `stringData.access-key-id` |
+| Access key | [`secret.yaml`](../examples/ibm-backup-restore/backup-storage-location/secret.yaml) | `stringData.access-key-id` |
 | Secret key | same | `stringData.secret-access-key` |
 
 `region` (`us-west-2`) is required by the S3 client; MinIO ignores it. Use your provider's region otherwise.

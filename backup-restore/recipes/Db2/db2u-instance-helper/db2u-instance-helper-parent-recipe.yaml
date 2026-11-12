@@ -17,7 +17,7 @@
 # helper-exec names a fixed namespace (db2u-bnr-recipe-helper). The
 # parent/child restore loader fails with KeyError unless every fixed hook
 # namespace is in namespaceMapping, so each Restore maps the helper namespace
-# to itself (see operations/restore.yaml).
+# to itself (see examples/operations/restore.yaml).
 #
 # Comments must not contain dollar-brace text: Fusion reads it as a recipe
 # variable.
@@ -25,7 +25,7 @@
 # Prerequisites:
 #   - IBM Fusion Backup & Restore 2.10+ (dynamic recipes)
 #   - Db2 12.1.4+ recommended (db2u-velero-plugin preserves credentials/license)
-#   - resources/db2u-bnr-recipe-helper/ applied, helper pod Running
+#   - db2u-bnr-recipe-helper/ applied, helper pod Running
 #   - Db2uInstance labelled for-backup=true
 #
 # Customize:

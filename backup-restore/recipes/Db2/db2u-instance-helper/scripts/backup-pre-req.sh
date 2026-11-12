@@ -13,7 +13,7 @@
 # Usage:
 #   ./backup-pre-req.sh <DB2U_INSTANCE_NAMESPACE>
 #
-# resources/db2u-instance/db2u-instance.yaml already sets the label. Run this
+# examples/db2u-instance/db2u-instance.yaml already sets the label. Run this
 # for instances created without it, before their first backup.
 
 set -euo pipefail

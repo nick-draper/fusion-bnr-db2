@@ -64,17 +64,20 @@ Last session: 2026-11-13. Next session starts here.
 
 ## Open threads
 
+0. **Layout move in progress (uncommitted at session end):** Nick is moving `resources/` and `operations/` to `scripts/backup-restore/recipe/Db2/other-recipes/production/` (transform at `scripts/backup-restore/transform/transform.yaml`), mirroring IBM's storage-fusion repo. Once settled, update every path in `README.md`, `docs/*.md`, `docs/images/deploy.svg`, the scripts (`configure-bnr.sh`, `configure-recipe-helper.sh`, `discover-instance-resources.sh`), and the parent recipe comment that points at `operations/restore.yaml`. `resources/README.md` was deleted with the move; decide where the file index lives. This handoff moved from `claude/handoff.md` to `docs/handoff.md`.
 1. **Open the PR** for `align-docs-scripts-helper` → `main`.
 2. **Run on a cluster:** `./scripts/configure-bnr.sh`, `./scripts/test-bnr.sh before`, back up, `after-backup`, restore, `after-restore`. Fix whatever the untested scripts get wrong.
 3. **PVC transform did not apply** in the tested run: `restored-app-pvcs.png` shows `environment=dev` (likely propagated by the operator from the instance) but no `backup=restored`. The PVC op path `/metadata/labels/my.cluster/environment` is not `~1`-escaped (Nick marked it intentional), and `replace` on the absent `backup` label would fail. `test-bnr.sh` checks labels on the Db2uInstance only. Decide whether to fix (`~1` escape, `add` for `backup`) and retest.
 4. **CA secret format:** `docs/end-to-end.md` §3.2 does not give the exact `oc create secret` command because the key name Fusion expects for `privateCertificateName` was not confirmed. Add it once known.
 5. **History still has the unredacted screenshot** and internal hostnames: commit `f646704` on `main` (and earlier commits) plus the commit author email. Rewriting history is Nick's call; the current tree is clean.
 6. **Transaction-manager RBAC on a clean cluster:** the child's check hooks (`db2uengine-check`, `db2uinstance-check`) and the `dashmpp-head-0` exec hooks run as Fusion's transaction-manager, not the helper. The tested cluster may still have the old `transaction-manager-db2u` ClusterRole bound. Verify on a clean cluster:
+
    ```bash
    oc get clusterrolebinding | grep -i transaction-manager
    oc auth can-i get db2uengines.db2u.databases.ibm.com -n db2u-instance-dev \
      --as=system:serviceaccount:ibm-backup-restore:transaction-manager
    ```
+
 7. Optional hardening (not done, recipe is tested): drop `-k` from the helper curl calls; replace the `grep '^    name: '` instance-name parsing with something less brittle; narrow `pods/exec` if the helper does not need it.
 
 ## Notes for the next session

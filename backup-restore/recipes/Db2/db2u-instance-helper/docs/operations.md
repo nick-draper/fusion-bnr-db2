@@ -4,8 +4,8 @@ Step 5 of [end-to-end.md](end-to-end.md). Steps 1–4 must be done and `./script
 
 | File | Role |
 | --- | --- |
-| [`operations/backup.yaml`](../operations/backup.yaml) | On-demand Backup of Application `db2u-instance` with `db2u-instance-backup-policy` |
-| [`operations/restore.yaml`](../operations/restore.yaml) | Restore of a `db2u-instance` backup into `db2u-instance-dev`, with the parent recipe and the transform |
+| [`examples/operations/backup.yaml`](../examples/operations/backup.yaml) | On-demand Backup of Application `db2u-instance` with `db2u-instance-backup-policy` |
+| [`examples/operations/restore.yaml`](../examples/operations/restore.yaml) | Restore of a `db2u-instance` backup into `db2u-instance-dev`, with the parent recipe and the transform |
 
 The policy also runs a scheduled backup daily at 04:00. The PolicyAssignment keeps `runNow: false`, so applying it does not start one.
 
@@ -44,10 +44,10 @@ The policy also runs a scheduled backup daily at 04:00. The PolicyAssignment kee
 
 ### From the CLI
 
-Set a unique `metadata.name` in [`operations/backup.yaml`](../operations/backup.yaml) for each run, then:
+Set a unique `metadata.name` in [`examples/operations/backup.yaml`](../examples/operations/backup.yaml) for each run, then:
 
 ```bash
-oc apply -f operations/backup.yaml
+oc apply -f examples/operations/backup.yaml
 oc get backup -n ibm-spectrum-fusion-ns -w
 ```
 
@@ -63,7 +63,7 @@ Passes when the newest Backup succeeded and `maintenance-pause-reconcile` is cle
 
 Before every restore into a new target:
 
-- The target project exists (`resources/db2u-instance/db2u-instance-dev-project.yaml`).
+- The target project exists (`examples/db2u-instance/db2u-instance-dev-project.yaml`).
 - The target is in the Db2 OperatorGroup and `namespace-scope` ConfigMap ([end-to-end §2.1](end-to-end.md#21-let-the-operator-watch-the-source-and-every-restore-target)).
 - Nodes carry `my.cluster/environment=<ENV>` ([§2.2](end-to-end.md#22-label-worker-nodes)).
 - The helper is Running on the restoring cluster (`./scripts/configure-recipe-helper.sh`).
@@ -72,7 +72,7 @@ Before every restore into a new target:
 
    ![Copy the backup name](screenshots/backup-completed-copy-name.png)
 
-2. Edit [`operations/restore.yaml`](../operations/restore.yaml):
+2. Edit [`examples/operations/restore.yaml`](../examples/operations/restore.yaml):
 
    ```yaml
    metadata:
@@ -95,7 +95,7 @@ Before every restore into a new target:
 3. Apply and watch:
 
    ```bash
-   oc apply -f operations/restore.yaml
+   oc apply -f examples/operations/restore.yaml
    oc get restore -n ibm-spectrum-fusion-ns -w
    oc get db2uinstance,pods,pvc -n db2u-instance-dev -w
    ```

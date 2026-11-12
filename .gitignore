@@ -13,3 +13,6 @@
 
 **/*backup-secret*
 **/*credentials*
+
+# Claude Code session files
+.claude/

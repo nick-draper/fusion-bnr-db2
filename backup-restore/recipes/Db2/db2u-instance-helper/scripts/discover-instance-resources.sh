@@ -35,5 +35,5 @@ echo "Namespace-scoped resources in ${NS} (cluster-scoped excluded):"
 oc get-resources --namespace "${NS}" --exclude-cluster-resources=true
 
 echo
-echo "Compare kinds above with includedResourceTypes in resources/ibm-backup-restore/recipe/db2u-instance-helper-child-recipe.yaml"
+echo "Compare kinds above with includedResourceTypes in db2u-instance-helper-child-recipe.yaml"
 echo "Current allow-list: persistent volumes (volume group), configmaps, secrets, db2uinstances.db2u.databases.ibm.com"

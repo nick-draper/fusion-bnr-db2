@@ -14,14 +14,14 @@
 # When to run:
 #   - On every cluster that backs up and every cluster that restores
 #
-# Usage (from the repository root):
+# Usage (from backup-restore/recipes/Db2/db2u-instance-helper/):
 #   ./scripts/configure-recipe-helper.sh
 
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 helper=db2u-bnr-recipe-helper
-dir="${root}/resources/${helper}"
+dir="${root}/${helper}"
 
 oc apply -f "${dir}/project.yaml"
 oc apply -f "${dir}/service-account.yaml"

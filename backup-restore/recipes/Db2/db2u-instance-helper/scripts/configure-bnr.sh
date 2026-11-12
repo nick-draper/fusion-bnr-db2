@@ -1,11 +1,11 @@
 #!/bin/bash
-# Apply steps 2-4 of docs/end-to-end.md from resources/.
+# Apply steps 2-4 of docs/end-to-end.md.
 #
 # Do these first (the script checks them, it does not do them):
 #   - Step 1: bucket, policy, user and access key (docs/object-storage-setup.md)
 #   - Fill placeholders:
-#       resources/db2u-instance/db2u-instance.yaml            <Insert License>, <storage-class>
-#       resources/ibm-backup-restore/backup-storage-location/secret.yaml
+#       examples/db2u-instance/db2u-instance.yaml             <Insert License>, <storage-class>
+#       examples/ibm-backup-restore/backup-storage-location/secret.yaml
 #                                                             <access-key-id>, <secret-access-key>
 #   - Edit the existing OperatorGroup and namespace-scope ConfigMap in
 #     db2-operator so they list the instance and every restore target
@@ -13,7 +13,7 @@
 #     ibm-spectrum-fusion-ns
 #   - Install db2u-velero-plugin on the Fusion DPA
 #
-# Usage (from the repository root):
+# Usage (from backup-restore/recipes/Db2/db2u-instance-helper/):
 #   ./scripts/configure-bnr.sh
 
 set -euo pipefail
@@ -25,7 +25,7 @@ fusion_ns=ibm-spectrum-fusion-ns
 op_ns=db2-operator
 src_ns=db2u-instance
 tgt_ns=db2u-instance-dev
-r=resources
+r=examples
 bnr=${r}/ibm-backup-restore
 
 fail() {
@@ -62,10 +62,10 @@ echo "3/4 Fusion BNR storage, policy, recipes, transform, assignment"
 oc apply -f "${bnr}/backup-storage-location/secret.yaml"
 oc apply -f "${bnr}/backup-storage-location/backup-storage-location.yaml"
 oc apply -f "${bnr}/backup-storage-location/backup-policy.yaml"
-oc apply -f "${bnr}/recipe/db2u-instance-helper-parent-recipe.yaml"
-oc apply -f "${bnr}/recipe/db2u-instance-helper-child-recipe.yaml"
-oc apply -f "${bnr}/recipe/transform.yaml"
-oc apply -f "${bnr}/recipe/policy-assignment.yaml"
+oc apply -f db2u-instance-helper-parent-recipe.yaml
+oc apply -f db2u-instance-helper-child-recipe.yaml
+oc apply -f db2u-instance-restore-transform.yaml
+oc apply -f "${bnr}/policy-assignment.yaml"
 
 echo "4/4 Recipe helper"
 "${root}/scripts/configure-recipe-helper.sh"
@@ -73,7 +73,7 @@ echo "4/4 Recipe helper"
 echo "Configured ${src_ns} (restore target ${tgt_ns})."
 echo "Next:"
 echo "  ./scripts/test-bnr.sh before"
-echo "  back up (Fusion UI or operations/backup.yaml, see docs/operations.md)"
+echo "  back up (Fusion UI or examples/operations/backup.yaml, see docs/operations.md)"
 echo "  ./scripts/test-bnr.sh after-backup"
-echo "  edit + apply operations/restore.yaml"
+echo "  edit + apply examples/operations/restore.yaml"
 echo "  ./scripts/test-bnr.sh after-restore"
