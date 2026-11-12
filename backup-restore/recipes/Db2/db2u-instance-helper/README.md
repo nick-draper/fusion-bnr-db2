@@ -128,7 +128,7 @@ A backup taken in namespace A does not apply unchanged in namespace C. Affinity 
 Four things have to move together:
 
 1. `namespaceMapping` on the Restore: the instance (`db2u-instance` to `db2u-instance-dev`) and the helper namespace to itself.
-2. A Transform whose JSON paths match your `Db2uInstance`. [`db2u-instance-restore-transform.yaml`](db2u-instance-restore-transform.yaml) rewrites the affinity value and the `my.cluster/environment` label to `${ENV}` (set by `transformMapping` on the Restore) and adds `backup=restored`. It is a starting point, not a schema for every cluster.
+2. A Transform whose JSON paths match your `Db2uInstance`. [`db2u-instance-restore-transform.yaml`](db2u-instance-restore-transform.yaml) rewrites the affinity value and the `my.cluster/environment` label to `${ENV}` (set by `transformMapping` on the Restore) and adds `backup=restored`. It is a starting point, not a schema for every cluster. The [Transform primer](../../../transform/README.md) explains the patch rules it relies on.
 3. The Db2u operator must watch the target. Add it to the OperatorGroup and `namespace-scope` ConfigMap in `db2-operator` before you restore, or nothing reconciles the restored instance.
 4. Worker nodes labelled for the target environment (`my.cluster/environment=dev`), or the rewritten affinity cannot schedule.
 

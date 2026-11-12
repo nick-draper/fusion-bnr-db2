@@ -1,0 +1,47 @@
+# Restore PVCs onto a different storage class, for example onto a cluster
+# that has no ODF, or from RBD to a new block class.
+#
+# PVCs accept JSON patch only (no merge, strategic or string patch).
+#
+# One rule per source class. The test makes each rule match only PVCs of
+# that class; a PVC on any other class is left as it was backed up.
+#
+# Variables, set by transformMapping on the Restore:
+#   SOURCE_CLASS_BLOCK, TARGET_CLASS_BLOCK
+#   SOURCE_CLASS_FILE,  TARGET_CLASS_FILE
+#
+# Changing class only works when the data can be copied, not cloned: a CSI
+# snapshot restores only through the same driver. Check that the backup
+# policy copies data to object storage before relying on this.
+#
+# Illustrative: not tested on a cluster.
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: Transform
+metadata:
+  name: transform-storage-class-migration
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  transforms:
+    - name: pvcs-block-class
+      json:
+        - op: test
+          path: /spec/storageClassName
+          value: '${SOURCE_CLASS_BLOCK}'
+        - op: replace
+          path: /spec/storageClassName
+          value: '${TARGET_CLASS_BLOCK}'
+      subject:
+        groupResource: persistentvolumeclaims
+
+    - name: pvcs-file-class
+      json:
+        - op: test
+          path: /spec/storageClassName
+          value: '${SOURCE_CLASS_FILE}'
+        - op: replace
+          path: /spec/storageClassName
+          value: '${TARGET_CLASS_FILE}'
+      subject:
+        groupResource: persistentvolumeclaims
+...

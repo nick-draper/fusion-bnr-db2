@@ -1,0 +1,71 @@
+# Promote a restore from one environment to another, for example prod to dev.
+#
+# namespaceMapping on the Restore moves metadata.namespace. Everything else
+# that still names the source environment (labels, node placement, route
+# hosts) is rewritten here.
+#
+# Variables, set by transformMapping on the Restore:
+#   ENV           target environment, for example dev
+#   ROUTE_DOMAIN  apps domain of the target cluster
+#
+# Rules select on app.kubernetes.io/part-of, which no rule changes. The order
+# Fusion applies rules in is not documented, so a rule must not depend on a
+# label another rule rewrites.
+#
+# Illustrative: not tested on a cluster. The tested Db2 example is
+# recipes/Db2/db2u-instance-helper/db2u-instance-restore-transform.yaml.
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: Transform
+metadata:
+  name: transform-namespace-promotion
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  transforms:
+    # The label key contains "/", so the JSON pointer writes it as ~1.
+    # The test makes the rule stop, changing nothing, unless the label is prod.
+    - name: deployments-environment-label
+      json:
+        - op: test
+          path: /metadata/labels/my.cluster~1environment
+          value: prod
+        - op: replace
+          path: /metadata/labels/my.cluster~1environment
+          value: '${ENV}'
+      subject:
+        groupResource: deployments.apps
+        labelSelector: app.kubernetes.io/part-of=orders
+
+    # Schedule the pods on nodes of the target environment. A strategic merge
+    # changes nodeSelector and leaves the rest of the pod template alone.
+    - name: deployments-node-selector
+      strategicPatches:
+        - patchData: |
+            {"spec": {"template": {"spec": {"nodeSelector": {"my.cluster/environment": "${ENV}"}}}}}
+      subject:
+        groupResource: deployments.apps
+        labelSelector: app.kubernetes.io/part-of=orders
+
+    # A route host is unique per cluster. Restoring the source host either
+    # collides with the live route or points at the wrong cluster.
+    - name: routes-host
+      json:
+        - op: replace
+          path: /spec/host
+          value: 'orders-${ENV}.${ROUTE_DOMAIN}'
+      subject:
+        groupResource: routes.route.openshift.io
+        labelSelector: app.kubernetes.io/part-of=orders
+
+    # Mark restored objects so nobody mistakes them for the source.
+    # add on /metadata/labels/<key> sets one label and keeps the others.
+    # add on /metadata/labels would replace the whole map.
+    - name: deployments-restored-marker
+      json:
+        - op: add
+          path: /metadata/labels/backup
+          value: restored
+      subject:
+        groupResource: deployments.apps
+        labelSelector: app.kubernetes.io/part-of=orders
+...

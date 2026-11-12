@@ -19,6 +19,7 @@ IBM’s [`db2u-instance-backup-restore-recipe.yaml`](https://github.com/IBM/stor
 The folders mirror upstream, so the variant can be dropped into `backup-restore/recipes/Db2/` as it is.
 
 ```text
+backup-restore/transform/                      primer on Transforms, with examples beyond the upstream samples
 backup-restore/recipes/Db2/db2u-instance-helper/
 ├── README.md                                  why, how it runs, what changed from the sample
 ├── db2u-instance-helper-parent-recipe.yaml
@@ -33,7 +34,7 @@ backup-restore/recipes/Db2/db2u-instance-helper/
 └── docs/                                      end-to-end runbook, object storage, operations
 ```
 
-Start with [the variant README](backup-restore/recipes/Db2/db2u-instance-helper/README.md), then [docs/end-to-end.md](backup-restore/recipes/Db2/db2u-instance-helper/docs/end-to-end.md).
+Start with [the variant README](backup-restore/recipes/Db2/db2u-instance-helper/README.md), then [docs/end-to-end.md](backup-restore/recipes/Db2/db2u-instance-helper/docs/end-to-end.md). For restoring into another namespace, read [the Transform primer](backup-restore/transform/README.md).
 
 ## Disclaimer
 

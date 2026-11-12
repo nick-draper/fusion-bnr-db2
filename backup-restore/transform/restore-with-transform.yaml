@@ -1,0 +1,28 @@
+# How a Restore uses a Transform.
+#
+#   namespaceMapping  source namespace -> target namespace
+#   transform         the name of ONE Transform CR in ibm-spectrum-fusion-ns
+#                     on the target cluster; put every rule the restore
+#                     needs in that one CR
+#   transformMapping  values for the variables the Transform uses
+#
+# Set every variable the Transform uses. The docs do not say what happens
+# to one that is left out.
+#
+# Illustrative: not tested on a cluster. The tested Db2 Restore is
+# recipes/Db2/db2u-instance-helper/examples/operations/restore.yaml.
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: Restore
+metadata:
+  name: restore-orders-prod-to-dev
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  backup: <backup name from the Fusion UI>
+  namespaceMapping:
+    orders-prod: orders-dev
+  transform: transform-namespace-promotion
+  transformMapping:
+    ENV: dev
+    ROUTE_DOMAIN: apps.my.cluster
+...
