@@ -32,7 +32,7 @@ PolicyAssignment  (configure/)
 ```
 
 **Backup:** pause instance + engine → child `instance-backup` → unpause  
-**Restore to QA:** child `instance-restore-data` → unpause → child `instance-restore-post` (settled → Ready → snapshot restore → Ready → restored marker)  
+**Restore to QA:** child `instance-restore-data` → unpause → child `instance-restore-post` (settled → Ready → snapshot restore → Ready → restored marker) → display name  
 
 Pause and unpause are **annotation hooks** on the `Db2uInstance` and `Db2uEngine` (`maintenance-pause-reconcile`), run by Fusion's `transaction-manager` in the instance namespace. No hook runs in `db2-operator`, so a Restore needs no `namespaceMapping` entry for it. A fixed hook namespace there made restore fail with `KeyError: 'db2-operator'`.
 
@@ -53,7 +53,7 @@ The instance is backed up paused, so it comes back paused; restore unpauses it b
 ./scripts/restore-pre-req.sh
 ```
 
-Applies [`rbac/transaction-manager-db2u.yaml`](../rbac/transaction-manager-db2u.yaml): `get`, `list`, `patch` on `db2uinstances` and `db2uengines` for `transaction-manager` in `ibm-backup-restore`. Every annotation hook runs as that account, so run it on every cluster that **backs up** and every cluster that **restores**. Edit the binding if your Fusion release runs `transaction-manager` elsewhere.
+Applies [`rbac/transaction-manager-db2u.yaml`](../rbac/transaction-manager-db2u.yaml): `get`, `list`, `patch` on `db2uinstances`, `db2uengines`, and `namespaces` for `transaction-manager` in `ibm-backup-restore`. Every annotation hook runs as that account, so run it on every cluster that **backs up** and every cluster that **restores**. Edit the binding if your Fusion release runs `transaction-manager` elsewhere.
 
 ---
 
@@ -117,7 +117,7 @@ oc get db2uinstance,pods,pvc -n dw-validation-qa -w
 ./scripts/test-bnr.sh after-restore
 ```
 
-Pass: display name `Db2 Warehouse (QA)`, annotation `db2u.fusion/restored=true`, Ready on QA and source. Then confirm the **enterprise** license on the restored instance yourself.
+Pass: display name `Db2 Warehouse (Restored)`, annotation `db2u.fusion/restored=true`, Ready on QA and source. Then confirm the **enterprise** license on the restored instance yourself.
 
 ![Transform](images/transform.svg)
 
@@ -125,9 +125,11 @@ Pass: display name `Db2 Warehouse (QA)`, annotation `db2u.fusion/restored=true`,
 
 ## 6. Display name rule
 
-The recipes do not set the display name. The target Project manifest (`configure/01-namespace-target.yaml`) owns it, and it is applied before the Restore: `dw-validation-qa` → `Db2 Warehouse (QA)`. Keep it in GitOps so it is reasserted if a restore ever carries the source name across.
+`ns-display-name` is an annotation hook, so it writes fixed text: `Db2 Warehouse (Restored)`. It cannot derive the old per-environment suffix (`dw-validation-qa` → `Db2 Warehouse (QA)`). For a per-environment name, keep it on the target Project manifest (`configure/01-namespace-target.yaml`) or in GitOps, and remove `ns-display-name/set` from the parent `restore` workflow.
 
-An `ns-display-name` annotation hook was tried and removed. Fusion does not substitute GROUP variables in `labelSelector`; the literal variable text reached the API server and recipe validation failed (`BMYBR0009 ... unable to parse requirement ... Invalid value`), which blocks the whole backup despite `onError: continue`.
+The hook selects the namespace with `nameSelector: '${GROUP.db2u-instances.namespace}'` (and the same variable in `namespace`). Do not use `labelSelector` for this: Fusion does not substitute variables there, and recipe validation fails with `BMYBR0009 ... unable to parse requirement ... Invalid value`, rejecting the whole backup despite `onError: continue`.
+
+---
 
 ## 7. Failures
 
