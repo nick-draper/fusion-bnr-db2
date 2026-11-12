@@ -1,0 +1,137 @@
+
+# Child recipe: Db2u instance namespace protection (tested on Fusion 2.12.2 Dynamic Recipe)
+#
+# Discovered by the parent via labels. Defines instance-scoped groups, hooks,
+# and the instance-backup / instance-restore workflows the parent invokes.
+#
+# Hook namespaces resolve from the parent's db2u-db2uinstances anchor group,
+# which follows namespaceMapping on restore — do not hardcode the instance
+# namespace.
+#
+# Comments must not contain dollar-brace text: Fusion reads it as a recipe
+# variable. Exec commands use the JSON-array form that runs on the cluster;
+# the multi-line shell form did not run.
+#
+# Label Db2uInstance objects with for-backup=true so readiness checks and the
+# parent's maintenance hooks match.
+---
+apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
+kind: Recipe
+metadata:
+  name: db2u-instance-helper-child
+  namespace: ibm-spectrum-fusion-ns
+  labels:
+    dp.isf.ibm.com/parent-recipe: db2u-instance-helper-parent
+    dp.isf.ibm.com/parent-recipe-namespace: ibm-spectrum-fusion-ns
+
+spec:
+  appType: db2uinstance
+
+  # Include-lists only. IBM's sample excludes a denylist and then backs up
+  # everything else in the namespace (including operator/OLM if colocated).
+  # An allow-list fails closed: a new resource type is not backed up until
+  # you add it after resource discovery.
+  groups:
+    - name: db2u-volumes
+      type: volume 
+      backupVolumes: fusion
+      disableTransform: false
+      
+    - name: db2u-resources
+      type: resource
+      backupVolumes: fusion
+      disableTransform: false
+      includedResourceTypes:
+        - configmaps
+        - secrets
+
+    - name: db2u-db2uinstances
+      type: resource
+      backupVolumes: fusion
+      disableTransform: false
+      includedResourceTypes:
+        - db2uinstances.db2u.databases.ibm.com
+
+  hooks:
+    - name: db2uengine-check
+      type: check
+      namespace: '${GROUP.db2u-db2uinstances.namespace}'
+      selectResource: db2u.databases.ibm.com/v1alpha1/db2uengines
+      labelSelector: 'type=engine,component=db2wh,formation_type=db2wh'
+      onError: fail
+      timeout: 120
+      chks:
+        - name: stateReady
+          condition: '{$.status.state} == {"Ready"}'
+          onError: fail
+          timeout: 600
+
+    - name: db2uinstance-check
+      type: check
+      namespace: '${GROUP.db2u-db2uinstances.namespace}'
+      labelSelector: for-backup=true
+      selectResource: db2u.databases.ibm.com/v1/db2uinstances  
+      onError: fail
+      timeout: 800  
+      chks:
+        - name: stateReady
+          condition: '{$.status.state} == {"Ready"}'
+          onError: fail
+          timeout: 900
+ 
+    - name: db2uinstances-pod-exec
+      type: exec
+      namespace: '${GROUP.db2u-db2uinstances.namespace}'
+      labelSelector: name=dashmpp-head-0
+      selectResource: pod
+      onError: fail
+      timeout: 300      
+      ops:
+        # Quiesce before volume snapshot; resume automatically if snapshot fails
+        - name: suspend
+          inverseOp: resume
+          container: db2u
+          overwrite: false
+          timeout: 300
+          command: |
+            ["/bin/bash", "-c", "manage_snapshots --action suspend --retry 3"]
+
+        - name: resume
+          container: db2u
+          overwrite: false
+          timeout: 300
+          command: |
+            ["/bin/bash", "-c", "manage_snapshots --action resume --retry 3"]
+
+        - name: restore
+          container: db2u
+          overwrite: false
+          timeout: 300
+          command: |
+            ["/bin/bash", "-c", "manage_snapshots --action restore --retry 3"]        
+
+  workflows:
+    # Invoked from parent backup after maintenance is enabled
+    - name: instance-backup
+      failOn: any-error
+      priority: 1000
+      sequence:
+        - group: db2u-resources
+        - group: db2u-db2uinstances
+        - hook: db2uinstances-pod-exec/suspend
+        - group: db2u-volumes
+        - hook: db2uinstances-pod-exec/resume
+
+    # Invoked from parent restore after the display name is set; the parent
+    # clears maintenance afterwards
+    - name: instance-restore
+      failOn: any-error
+      priority: 1000
+      sequence:
+        - group: db2u-volumes
+        - group: db2u-resources
+        - group: db2u-db2uinstances
+        - hook: db2uengine-check/stateReady
+        - hook: db2uinstances-pod-exec/restore
+        - hook: db2uinstances-pod-exec/resume
+        - hook: db2uinstance-check/stateReady

@@ -1,0 +1,43 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db2u-bnr-recipe-helper
+  namespace: db2u-bnr-recipe-helper
+  labels:
+    app: db2u-bnr-recipe-helper
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db2u-bnr-recipe-helper
+  template:
+    metadata:
+      labels:
+        app: db2u-bnr-recipe-helper
+    spec:
+      serviceAccountName: db2u-bnr-recipe-helper
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: helper
+          image: my.registry/ubi9/ubi-minimal:9.4-1227.1726694542 #registry.access.redhat.com/ubi9/ubi-minimal:9.4-1227.1726694542
+          command: ["/bin/bash", "-c", "sleep infinity"]
+          env:
+            - name: HOME
+              value: /tmp
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+...

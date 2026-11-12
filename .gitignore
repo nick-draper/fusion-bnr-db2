@@ -12,5 +12,7 @@
 /recipe/dslab-*
 
 **/*backup-secret*
-!examples/configure/03-backup-secret.yaml
 **/*credentials*
+
+# Claude Code session files
+.claude/

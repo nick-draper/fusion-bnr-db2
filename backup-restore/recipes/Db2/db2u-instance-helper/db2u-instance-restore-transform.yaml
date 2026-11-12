@@ -1,0 +1,34 @@
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: Transform
+metadata:
+  name: db2u-instance-restore-transform
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  transforms:
+    - json:
+        - op: replace
+          path: /spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values/0
+          value: '${ENV}'
+        - op: replace
+          path: /metadata/labels/my.cluster~1environment #intenional inconsistency to avoid yaml parsing issues
+          value: '${ENV}'
+        - op: add
+          path: /metadata/labels/backup
+          value: restored
+      name: update-db2uinstance
+      subject:
+        groupResource: db2uinstances.db2u.databases.ibm.com
+        resourceNameRegex: dwdb
+    - json:
+        - op: replace
+          path: /metadata/labels/my.cluster/environment #intenional inconsistency to avoid yaml parsing issues
+          value: '${ENV}'
+        - op: replace
+          path: /metadata/labels/backup
+          value: restored
+      name: update-pvcs
+      subject:
+        groupResource: persistentvolumeclaims
+        resourceNameRegex: .*
+...
