@@ -1,0 +1,13 @@
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: db2-operator-g5w5k
+  namespace: db2-operator
+spec:
+  targetNamespaces:
+    - db2-operator
+    - db2u-instance
+    - db2u-instance-dev
+  upgradeStrategy: Default
+...

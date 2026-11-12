@@ -1,0 +1,16 @@
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: BackupPolicy
+metadata:
+  name: db2u-instance-backup-policy
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  backupStorageLocation: db2u-instance-backup-storage-location
+  provider: isf-backup-restore ## this must be set to isf-backup-restore
+  retention:
+    number: 5
+    unit: days
+  schedule:
+    cron: '00 04 * * *'
+    timezone: Australia/Sydney
+...

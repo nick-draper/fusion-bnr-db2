@@ -1,0 +1,11 @@
+---
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: db2u-bnr-recipe-helper
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    openshift.io/display-name: DB2u Recipe Helper
+    openshift.io/description: Runs Fusion backup/restore recipe hook commands
+...

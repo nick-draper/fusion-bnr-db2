@@ -1,0 +1,16 @@
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: PolicyAssignment
+metadata:
+  name: db2u-instance-recipe-policy-assignment
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  application: db2u-instance
+  backupPolicy: db2u-instance-backup-policy
+  recipe:
+    apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
+    kind: Recipe
+    name: db2u-instance-helper-parent
+    namespace: ibm-spectrum-fusion-ns
+  runNow: false
+...

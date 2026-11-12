@@ -1,0 +1,9 @@
+---
+kind: Project
+apiVersion: project.openshift.io/v1
+metadata:
+  name: db2u-instance
+  annotations:
+    openshift.io/description: 'This is a sample data project for validation only'
+    openshift.io/display-name: DB2U Instance (PROD)
+...

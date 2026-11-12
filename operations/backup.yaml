@@ -1,0 +1,11 @@
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: Backup
+metadata:
+  name: backup-db2u-instance-20261113
+  namespace: ibm-spectrum-fusion-ns
+
+spec:
+  application: db2u-instance
+  backupPolicy: db2u-instance-backup-policy
+...
