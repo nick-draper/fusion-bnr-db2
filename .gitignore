@@ -16,3 +16,6 @@
 
 # Claude Code session files
 .claude/
+
+# Local session notes, kept out of the repo
+claude/
