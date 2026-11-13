@@ -1,0 +1,16 @@
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: BackupStorageLocation
+metadata:
+  name: db2u-instance-backup-storage-location
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  credentialName: db2u-instance-backup-secret
+  params:
+    bucket: db2u-instance-bucket
+    endpoint: 'https://s3.my.cluster:9200'
+    region: us-west-2
+  privateCertificateName: minio-registry-cert-secret
+  provider: isf-backup-restore
+  type: s3
+...

@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Db2u Diagram Styles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a sticky control rail over one column of full-width figure plates, each with its caption, change note and export actions */
+:root {
+  --bg: #F2F3F5;
+  --surface: #FFFFFF;
+  --surface-2: #F7F8FA;
+  --line: #DADEE4;
+  --ink: #14171C;
+  --muted: #5B636E;
+  --faint: #8A929D;
+  --accent: #2F5BEA;
+  --accent-soft: #E8EEFF;
+  --on-accent: #FFFFFF;
+  --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B0D10; --surface: #13161B; --surface-2: #181C22; --line: #262B33;
+    --ink: #E6E9EE; --muted: #98A1AD; --faint: #6B7480;
+    --accent: #8AA4FF; --accent-soft: #1A2240; --on-accent: #0B0D10;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B0D10; --surface: #13161B; --surface-2: #181C22; --line: #262B33;
+  --ink: #E6E9EE; --muted: #98A1AD; --faint: #6B7480;
+  --accent: #8AA4FF; --accent-soft: #1A2240; --on-accent: #0B0D10;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 14px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 10; background: var(--surface);
+}
+.wrap {
+  max-width: 1280px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Masthead */
+.mast { padding-block: 40px 28px; display: grid; gap: 10px; }
+.kicker { font: 500 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+h1 { margin: 0; font: 600 30px/1.15 var(--sans); letter-spacing: -0.02em; text-wrap: balance; }
+.lede { margin: 0; max-width: 68ch; color: var(--muted); font-size: 15px; }
+
+/* Control rail */
+.rail {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  border-block: 1px solid var(--line);
+}
+.rail .wrap { padding-block: 12px; display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-start; }
+.ctl { display: grid; gap: 6px; min-width: 0; }
+.ctl-label { font: 500 10.5px/1 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--faint); }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button {
+  font: 500 13px/1 var(--sans); color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  transition: background-color .12s, color .12s, border-color .12s;
+}
+.seg button:hover { color: var(--ink); border-color: var(--faint); }
+.seg button[aria-pressed="true"] { color: var(--ink); background: var(--accent-soft); border-color: var(--accent); }
+.seg button:focus-visible, .btn:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sw { display: inline-flex; gap: 2px; }
+.sw i { width: 9px; height: 14px; border-radius: 2px; display: block; }
+
+/* Palette readout */
+.readout { padding-block: 24px 8px; display: grid; gap: 14px; }
+.readout-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+.readout-head h2 { margin: 0; font: 600 17px/1.2 var(--sans); letter-spacing: -0.01em; }
+.readout-head p { margin: 0; color: var(--muted); max-width: 70ch; }
+.tokens { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.tokens table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 12.5px; }
+.tokens th, .tokens td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tokens tr:last-child td { border-bottom: 0; }
+.tokens th { font: 500 10.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); background: var(--surface-2); }
+.tokens td.role { font-weight: 600; }
+.tokens td.use { color: var(--muted); white-space: normal; min-width: 180px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 400 11.5px/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 10px; }
+.chip b { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(127,127,127,.35); display: inline-block; }
+.tokens .grp { color: var(--faint); font: 500 10.5px/1 var(--mono); letter-spacing: .06em; margin-right: 6px; }
+
+/* Figures */
+.figs { padding-block: 20px 64px; display: grid; gap: 28px; }
+.plate { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+.plate-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+  padding: 14px 18px; border-bottom: 1px solid var(--line);
+}
+.plate-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
+.plate-title .n { font: 500 11px/1 var(--mono); letter-spacing: .08em; color: var(--faint); }
+.plate-title h3 { margin: 0; font: 600 15px/1.3 var(--sans); }
+.plate-title code { font: 400 12px/1 var(--mono); color: var(--muted); }
+.actions { display: flex; gap: 6px; align-items: center; }
+.btn {
+  font: 500 12.5px/1 var(--sans); color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 11px; cursor: pointer;
+}
+.btn:hover { border-color: var(--faint); }
+.btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.btn.primary:hover { opacity: .9; }
+.status { font: 400 11.5px/1 var(--mono); color: var(--muted); min-width: 52px; text-align: right; }
+.stage { padding: 18px; display: grid; gap: 14px; background: var(--surface-2); }
+.stage.both { grid-template-columns: 1fr; }
+.view { display: grid; gap: 6px; min-width: 0; }
+.view-tag { font: 500 10.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.scroller { overflow-x: auto; border-radius: 8px; }
+.scroller svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.plate-foot { padding: 14px 18px 16px; display: grid; gap: 8px; border-top: 1px solid var(--line); }
+.plate-foot p { margin: 0; max-width: 92ch; }
+.plate-foot .cap { font-size: 14px; }
+.plate-foot .delta { color: var(--muted); font-size: 13px; }
+.plate-foot .delta b { font: 500 10.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-right: 8px; }
+details { border-top: 1px dashed var(--line); padding-top: 8px; }
+summary { cursor: pointer; font: 500 12px/1.4 var(--sans); color: var(--muted); width: max-content; }
+textarea {
+  margin-top: 8px; width: 100%; min-height: 160px; resize: vertical;
+  font: 400 11.5px/1.5 var(--mono); color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+}
+
+/* Notes */
+.notes { padding-block: 0 56px; display: grid; gap: 10px; color: var(--muted); max-width: 86ch; font-size: 13.5px; }
+.notes h2 { margin: 0 0 2px; color: var(--ink); font: 600 15px/1.3 var(--sans); }
+.notes p { margin: 0; }
+.notes code { font: 400 12.5px var(--mono); color: var(--ink); }
+
+@media (max-width: 760px) {
+  .rail { position: static; }
+  h1 { font-size: 25px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="wrap mast">
+  <div class="kicker">fusion-bnr-db2 · docs/images</div>
+  <h1>Db2u Diagram Styles</h1>
+  <p class="lede">The four README figures for the Db2uInstance recipe, redrawn as one system. Pick a palette, a drawing treatment and a type family, compare light and dark, then copy any figure as a self-contained SVG for <code style="font-family:var(--mono);font-size:13px">docs/images/</code>.</p>
+</header>
+
+<nav class="rail" aria-label="Diagram style controls">
+  <div class="wrap">
+    <div class="ctl"><span class="ctl-label" id="lbl-pal">Palette</span><div class="seg" id="ctl-pal" role="group" aria-labelledby="lbl-pal"></div></div>
+    <div class="ctl"><span class="ctl-label" id="lbl-treat">Treatment</span><div class="seg" id="ctl-treat" role="group" aria-labelledby="lbl-treat"></div></div>
+    <div class="ctl"><span class="ctl-label" id="lbl-type">Type</span><div class="seg" id="ctl-type" role="group" aria-labelledby="lbl-type"></div></div>
+    <div class="ctl"><span class="ctl-label" id="lbl-theme">Preview</span><div class="seg" id="ctl-theme" role="group" aria-labelledby="lbl-theme"></div></div>
+    <div class="ctl"><span class="ctl-label" id="lbl-exp">Export</span><div class="seg" id="ctl-exp" role="group" aria-labelledby="lbl-exp"></div></div>
+  </div>
+</nav>
+
+<section class="wrap readout" aria-labelledby="pal-name">
+  <div class="readout-head"><h2 id="pal-name"></h2><p id="pal-note"></p></div>
+  <div class="tokens"><table id="tok-table"></table></div>
+</section>
+
+<main class="wrap figs" id="figs"></main>
+
+<section class="wrap notes">
+  <h2>Getting a figure into the README</h2>
+  <p><b>Adaptive</b> export embeds both palettes and switches on the reader's colour scheme through <code>prefers-color-scheme</code>, which GitHub honours for SVGs shown with <code>![alt](docs/images/…svg)</code>. <b>Light</b> and <b>Dark</b> export one palette only.</p>
+  <p>GitHub draws README images without web fonts. The SVG names the chosen family first and falls back to the system stack (San Francisco, Segoe UI, Helvetica, Arial; Menlo or Consolas for data), so line lengths in each drawing leave room for a slightly wider fallback.</p>
+  <p>Replace the file of the same name in <code>docs/images/</code>; the README references stay as they are.</p>
+</section>
+
+<script>
+<script src="figures.js"></script>
+<script>
+(function () {
+  "use strict";
+  const { TYPE, ROLES, BASE, PALETTES, TREATS, TREAT_NOTES, FIGS, buildSVG, esc, LOCKED } = window.Db2uFigures;
+
+  /* ---------- State and controls ---------- */
+
+  const state = { pal: "carbon", treat: "outline", type: "plex", theme: "page", exp: "adaptive" };
+  try {
+    const saved = JSON.parse(localStorage.getItem("db2u-diagram-styles") || "{}");
+    Object.keys(state).forEach(function (k) { if (typeof saved[k] === "string") state[k] = saved[k]; });
+  } catch (e) { /* storage unavailable: use defaults */ }
+  if (!PALETTES[state.pal]) state.pal = "carbon";
+  if (!TREATS[state.treat]) state.treat = "panel";
+  if (!TYPE[state.type]) state.type = "plex";
+
+  function save() { try { localStorage.setItem("db2u-diagram-styles", JSON.stringify(state)); } catch (e) { /* ignore */ } }
+
+  const CONTROLS = {
+    pal: Object.keys(PALETTES).map(function (k) {
+      const L = PALETTES[k].light;
+      return { v: k, html: '<span class="sw" aria-hidden="true"><i style="background:' + L.priL + '"></i><i style="background:' + L.secL + '"></i><i style="background:' + L.neuL + '"></i><i style="background:' + L.ink + '"></i></span>' + esc(PALETTES[k].name) };
+    }),
+    treat: Object.keys(TREATS).map(function (k) { return { v: k, html: esc(TREATS[k].name), title: TREAT_NOTES[k] }; }),
+    type: Object.keys(TYPE).map(function (k) { return { v: k, html: esc(TYPE[k].name) }; }),
+    theme: [{ v: "page", html: "Match page" }, { v: "light", html: "Light" }, { v: "dark", html: "Dark" }, { v: "both", html: "Both" }],
+    exp: [{ v: "adaptive", html: "Adaptive" }, { v: "light", html: "Light" }, { v: "dark", html: "Dark" }]
+  };
+
+  function renderControls() {
+    Object.keys(CONTROLS).forEach(function (key) {
+      const host = document.getElementById("ctl-" + key);
+      host.innerHTML = CONTROLS[key].map(function (o) {
+        return '<button type="button" id="b-' + key + "-" + o.v + '" data-k="' + key + '" data-v="' + o.v + '" aria-pressed="' + (state[key] === o.v) + '"' + (o.title ? ' title="' + esc(o.title) + '"' : "") + ">" + o.html + "</button>";
+      }).join("");
+    });
+  }
+
+  document.querySelector(".rail").addEventListener("click", function (e) {
+    const b = e.target.closest("button[data-k]");
+    if (!b) return;
+    state[b.dataset.k] = b.dataset.v;
+    save();
+    renderControls();
+    if (b.dataset.k === "pal") renderTokens();
+    renderFigs();
+  });
+
+  function renderTokens() {
+    const P = PALETTES[state.pal];
+    document.getElementById("pal-name").textContent = P.name;
+    document.getElementById("pal-note").textContent = P.note;
+    const chip = function (hex) { return '<span class="chip"><b style="background:' + hex + '"></b>' + hex + "</span>"; };
+    let h = "<thead><tr><th>Role</th><th>Light · fill / stroke / text</th><th>Dark · fill / stroke / text</th><th>Used for</th></tr></thead><tbody>";
+    ROLES.forEach(function (r) {
+      const k = r[0];
+      h += '<tr><td class="role">' + r[1] + "</td><td>" + chip(P.light[k + "F"]) + chip(P.light[k + "L"]) + chip(P.light[k + "I"]) +
+        "</td><td>" + chip(P.dark[k + "F"]) + chip(P.dark[k + "L"]) + chip(P.dark[k + "I"]) + '</td><td class="use">' + r[2] + "</td></tr>";
+    });
+    h += '<tr><td class="role">Base</td><td>' + BASE.map(function (b) { return chip(P.light[b[0]]); }).join("") + "</td><td>" +
+      BASE.map(function (b) { return chip(P.dark[b[0]]); }).join("") + '</td><td class="use">' + BASE.map(function (b) { return b[1]; }).join(", ") + "</td></tr></tbody>";
+    document.getElementById("tok-table").innerHTML = h;
+  }
+
+  function renderFigs() {
+    const host = document.getElementById("figs");
+    const views = state.theme === "both" ? ["light", "dark"] : [state.theme];
+    host.innerHTML = FIGS.map(function (f, i) {
+      const stage = views.map(function (v) {
+        const s = { pal: state.pal, treat: state.treat, type: state.type, mode: v };
+        const svg = buildSVG(f, s, "v-" + f.key + "-" + v, false);
+        return '<div class="view">' + (views.length > 1 ? '<span class="view-tag">' + v + "</span>" : "") + '<div class="scroller">' + svg + "</div></div>";
+      }).join("");
+      return '<article class="plate" aria-labelledby="h-' + f.key + '">' +
+        '<div class="plate-head"><div class="plate-title"><span class="n">FIG ' + (i + 1) + '</span><h3 id="h-' + f.key + '">' + esc(f.name) + "</h3><code>" + f.file + "</code></div>" +
+        '<div class="actions"><span class="status" id="st-' + f.key + '" aria-live="polite"></span><button type="button" class="btn primary" id="copy-' + f.key + '" data-copy="' + i + '">Copy ' + state.exp + " SVG</button></div></div>" +
+        '<div class="stage">' + stage + "</div>" +
+        '<div class="plate-foot"><p class="cap">' + esc(f.cap) + '</p><p class="delta"><b>Changed</b>' + esc(f.delta) + "</p>" +
+        '<details id="code-' + f.key + '"><summary>Show SVG source</summary><textarea id="ta-' + f.key + '" readonly spellcheck="false"></textarea></details></div>' +
+        "</article>";
+    }).join("");
+  }
+
+  function exportString(i) {
+    const f = FIGS[i];
+    return buildSVG(f, { pal: state.pal, treat: state.treat, type: state.type, mode: state.exp }, "db2u-" + f.key, true) + "\n";
+  }
+
+  document.getElementById("figs").addEventListener("click", function (e) {
+    const b = e.target.closest("button[data-copy]");
+    if (!b) return;
+    const i = +b.dataset.copy, f = FIGS[i], code = exportString(i);
+    const st = document.getElementById("st-" + f.key);
+    const ta = document.getElementById("ta-" + f.key);
+    ta.value = code;
+    const fallback = function () {
+      document.getElementById("code-" + f.key).open = true;
+      ta.focus(); ta.select();
+      st.textContent = "Select and copy";
+    };
+    try {
+      navigator.clipboard.writeText(code).then(function () { st.textContent = "Copied"; setTimeout(function () { st.textContent = ""; }, 1800); }, fallback);
+    } catch (err) { fallback(); }
+  });
+
+  document.getElementById("figs").addEventListener("toggle", function (e) {
+    const d = e.target;
+    if (!d.open || d.tagName !== "DETAILS") return;
+    const key = d.id.replace("code-", "");
+    const i = FIGS.findIndex(function (f) { return f.key === key; });
+    document.getElementById("ta-" + key).value = exportString(i);
+  }, true);
+
+  renderControls();
+  renderTokens();
+  renderFigs();
+})();
+</script>
+</html>

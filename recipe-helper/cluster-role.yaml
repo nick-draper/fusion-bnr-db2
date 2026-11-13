@@ -1,0 +1,38 @@
+---
+# Permissions for the db2u-bnr-recipe-helper service account. The parent
+# recipe's helper-exec hooks run curl in the helper pod with this account's
+# token, in any Db2 namespace:
+#   - list Db2uInstances / Db2uEngines, then patch maintenance-pause-reconcile
+#   - set the target Project display name (patch namespaces)
+#
+# Nothing else. Fusion, not this account, execs into the helper pod, so the
+# helper needs no pods or pods/exec access.
+#
+# Namespaces are cluster-scoped, so the namespaces rule needs this
+# ClusterRoleBinding. To narrow the Db2u rule, split it into a Role bound with
+# a RoleBinding in each Db2 namespace and each restore target.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: db2u-bnr-recipe-helper
+
+rules:
+  - apiGroups:
+      - db2u.databases.ibm.com
+    resources:
+      - db2uinstances
+      - db2uengines
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - patch
+...
