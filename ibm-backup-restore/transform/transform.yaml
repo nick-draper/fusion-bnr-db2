@@ -1,0 +1,37 @@
+---
+apiVersion: data-protection.isf.ibm.com/v1alpha1
+kind: Transform
+metadata:
+  name: db2u-instance-restore-transform
+  namespace: ibm-spectrum-fusion-ns
+spec:
+  transforms:
+    - json:
+        - op: replace
+          path: /spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values/0
+          value: '${ENV}'
+        # JSON Pointer writes the / in a label key as ~1 (my.cluster/environment).
+        - op: replace
+          path: /metadata/labels/my.cluster~1environment
+          value: '${ENV}'
+        - op: add
+          path: /metadata/labels/backup
+          value: restored
+      name: update-db2uinstance
+      subject:
+        groupResource: db2uinstances.db2u.databases.ibm.com
+        resourceNameRegex: dwdb
+    # add, not replace: add sets a label whether or not the PVC already has it,
+    # replace fails when it is missing.
+    - json:
+        - op: add
+          path: /metadata/labels/my.cluster~1environment
+          value: '${ENV}'
+        - op: add
+          path: /metadata/labels/backup
+          value: restored
+      name: update-pvcs
+      subject:
+        groupResource: persistentvolumeclaims
+        resourceNameRegex: .*
+...

@@ -1,16 +1,6 @@
 .DS_Store
 
-# Local environment manifests. Not part of the published recipe.
-/appli
-/backup-policy/
-/backup-storage-location/
-/project/
-/policy-assignment/
-/dbr.yaml
-/custom-restore-transform-*
-/dslab-*
-/recipe/dslab-*
-
+# Stray credential files. The committed manifests hold <...> placeholders only.
 **/*backup-secret*
 **/*credentials*
 
@@ -18,4 +8,8 @@
 .claude/
 
 # Local session notes, kept out of the repo
-claude/
+.handoff/
+
+# Diagram generator: installed packages and unpacked fonts
+docs/images/src/node_modules/
+docs/images/src/.fonts/

@@ -1,0 +1,14 @@
+{
+  "name": "db2u-figures",
+  "private": true,
+  "description": "Generates the README figures in docs/images/",
+  "license": "UNLICENSED",
+  "scripts": {
+    "export": "node export.js"
+  },
+  "devDependencies": {
+    "@ibm/plex-mono": "2.5.0",
+    "@ibm/plex-sans": "1.1.0",
+    "@resvg/resvg-js": "2.6.2"
+  }
+}
