@@ -134,5 +134,4 @@ spec:
         - group: db2u-db2uinstances
         - hook: db2uengine-check/stateReady
         - hook: db2uinstances-pod-exec/restore
-        - hook: db2uinstances-pod-exec/resume
         - hook: db2uinstance-check/stateReady

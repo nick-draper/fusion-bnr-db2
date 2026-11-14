@@ -56,56 +56,44 @@ deploy:
       runs_in: Fusion UI or oc
 
 layouts:
-  title: Namespace layouts
-  subtitle: IBM's sample keeps the operator with the instance. Production clusters give the operator its own namespace.
+  title: Deployment Architecture
+  subtitle: Production Db2 deployments avoid deploying instances within the operator namespace.
   alt: "Namespace layouts: IBM's sample puts the Db2u operator and the instance in one namespace, so a backup carries both. The production layout gives the operator its own GitOps-managed namespace and each instance its own namespace and backup scope."
   caption: IBM's sample backs up the operator with the database. In production, GitOps owns the operator and Fusion protects each instance namespace on its own.
   sample:
-    heading: IBM sample layout
+    heading: Lab Deployment
     meta: one namespace
     namespace:
       label: Namespace · backup scope
       title: Shared namespace
     operator:
       title: Db2u operator
-      detail: Subscription · OperatorGroup · CSV · manager pod
+      detail: operator manager pod · day 2 ops controller pod
     instance:
       title: Db2uInstance
-      detail: volumes · configmaps · secrets
+      detail: instance · volumes
     arrow: reconciles
-    list_title: Trade-offs of sharing a namespace
-    list:
-      - Project access spans the operator and the database
-      - Backups carry operator and OLM objects
-      - Deleting the project removes both
-      - Restores only into the same namespace
   production:
-    heading: Production layout
+    heading: Production Deployment
     meta: namespace per instance
     operator:
       label: Namespace · not backed up
       title: db2-operator
-      code: Db2u operator · managed by GitOps
+      code: operator manager pod · day 2 ops controller pod
     instance_a:
       label: Namespace · backup scope
-      title: Instance A
-      code: Db2uInstance + volumes
+      title: Prod
+      code: instance · volumes
     instance_b:
       label: Namespace · backup scope
-      title: Instance B
-      code: Db2uInstance + volumes
+      title: Dev
+      code: instance · volumes
     arrow: reconciles
-    list_title: Benefits of separate namespaces
-    list:
-      - Access scoped to each instance
-      - Operator rebuilt from GitOps, not restored
-      - Fusion backs up only the database
-      - Restore into another namespace
 
 architecture:
-  title: Recipe topology
-  subtitle: The parent pauses the instance from the helper pod. The child snapshots it. Nothing runs in db2-operator.
-  alt: "Recipe topology: the policy assignment names the parent recipe, which finds the child by label. The parent runs helper-exec in the helper pod, which patches the Db2uInstance and Db2uEngine. The child runs manage_snapshots in dashmpp-head-0. The operator reconciles but runs no hooks. Only db2u-instance is backed up."
+  title: Recipe architecture
+  subtitle: The parent pauses the instance from the helper pod. The child manages resources and snapshots. Nothing runs in db2-operator.
+  alt: "Recipe topology: the policy assignment names the application and the parent recipe. The parent finds the child by label. The parent runs helper-exec in the helper pod, which patches the Db2uInstance and Db2uEngine. The child runs manage_snapshots in dashmpp-head-0. The operator reconciles but runs no hooks. Only db2u-instance is backed up."
   caption: The parent pauses the instance through API calls from the helper pod, the child execs into dashmpp-head-0, and only db2u-instance is backed up.
   fusion:
     heading: IBM Fusion
@@ -116,13 +104,15 @@ architecture:
   assignment:
     label: Assignment
     title: Policy assignment
-    code: "recipe: db2u-instance-helper-parent"
+    code:
+      - "application: db2u-instance"
+      - "recipe: db2u-instance-helper-parent"
   parent:
     label: Parent recipe
     title: db2u-instance-helper-parent
     lines:
-      - Pause and unpause the instance
-      - Set the target display name
+      - Pause and unpause annotations
+      - Target namespace display name annotation
     code: hooks run in the helper pod
   child:
     label: Child recipe
@@ -134,14 +124,14 @@ architecture:
     label: Namespace
     title: recipe-helper
     lines:
-      - "Helper pod: curl and its own service account"
-    code: not backed up · every Restore maps it to itself
+      - maintenance-mode-on/off for instance + engine
+    code: not backed up · parent recipe hooks
   instance:
     label: Namespace · backup scope
     title: db2u-instance
     contents: configmaps · secrets · PVCs
   pod:
-    title: dashmpp-head-0
+    title: Pod
     detail: container db2u
   cr:
     title: Db2uInstance
@@ -156,10 +146,74 @@ architecture:
   arrows:
     names: names
     finds: finds by label
-    helper_exec: helper-exec
-    snapshots: exec manage_snapshots
+    helper_exec: exec
+    snapshots: exec
     patch: PATCH maintenance-pause-reconcile
     reconciles: reconciles
+
+workflow:
+  title: Recipe workflow
+  subtitle: Every step the parent's backup and restore workflows run, in order, with the child's workflow inside each.
+  alt: "Recipe workflow. Backup: the parent pauses the Db2uInstance and Db2uEngine from the helper pod; the child backs up configmaps, secrets and the Db2uInstance, suspends writes, snapshots the volumes and resumes; the parent unpauses the engine and the instance. On failure, inverseOps undo the completed steps. Restore: the parent sets the project display name; the child restores the volumes, configmaps, secrets and the paused Db2uInstance, waits for the engine, runs the snapshot restore and waits for the instance; the parent waits 300 seconds, then unpauses the engine and the instance."
+  caption: The parent pauses and unpauses from the helper pod; the child copies the instance between those steps. A restore brings the instance back paused, so the parent clears maintenance last.
+  backup:
+    heading: Backup
+    meta: "workflow: backup"
+    parent: "Parent · backup"
+    child: "Child · instance-backup"
+    steps:
+      - op: maintenance-mode-on
+        detail: pause Db2uInstance
+      - op: engine-maintenance-mode-on
+        detail: pause Db2uEngine
+      - op: db2u-resources
+        detail: configmaps, secrets
+      - op: db2u-db2uinstances
+        detail: Db2uInstance, paused
+      - op: suspend
+        detail: manage_snapshots suspend
+      - op: db2u-volumes
+        detail: volume snapshots
+      - op: resume
+        detail: writes resume
+      - op: engine-maintenance-mode-off
+        detail: unpause Db2uEngine
+      - op: maintenance-mode-off
+        detail: unpause Db2uInstance
+    failure:
+      label: On failure
+      title: Completed steps are undone
+      code: inverseOps keep the database active after a failure
+  restore:
+    heading: Restore
+    meta: "workflow: restore"
+    parent: "Parent · restore"
+    child: "Child · instance-restore"
+    steps:
+      - op: set-display-name
+        detail: name the target project
+      - op: db2u-volumes
+        detail: PVCs from snapshots
+      - op: db2u-resources
+        detail: configmaps, secrets
+      - op: db2u-db2uinstances
+        detail: Db2uInstance, still paused
+      - op: db2uengine-check
+        detail: wait for engine Ready
+      - op: restore
+        detail: manage_snapshots restore
+      - op: db2uinstance-check
+        detail: wait for instance Ready
+      - op: sleep-after-restore
+        detail: settle 300 s
+      - op: engine-maintenance-mode-off
+        detail: unpause Db2uEngine
+      - op: maintenance-mode-off
+        detail: unpause Db2uInstance
+    transform:
+      label: Transform
+      title: Restored objects are updated
+      code: Transforms enable cross-namespace restores
 
 transform:
   title: Cross-namespace restore
@@ -248,4 +302,4 @@ failover:
     label: Result
     title: Source in service
     code: writable, reconciling
-    note: Not a failover
+    note: Operational
