@@ -104,7 +104,7 @@ Before every restore into a new target:
    oc get db2uinstances.db2u.databases.ibm.com,pods,pvc -n "$TARGET_NS"
    ```
 
-   The restore sets the target display name, restores volumes, resources and the `Db2uInstance`, waits for the engine to be Ready, runs `manage_snapshots --action restore` and `resume`, waits for the instance to be Ready, waits 300 s, then clears maintenance.
+   The restore sets the target display name, restores volumes, resources and the `Db2uInstance`, waits for the engine to be Ready, runs `manage_snapshots --action restore`, waits for the instance to be Ready, waits 300 s, then clears maintenance.
 
    ![Restore pending](screenshots/restore-pending-application-screen.png)
    ![Restore checking inventory](screenshots/restore-checking-inventory-application-screen.png)

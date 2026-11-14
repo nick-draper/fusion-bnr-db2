@@ -1,43 +1,84 @@
-# Deploy step by step
+# Deployment guide
 
-Deploy the recipes on the `db2u-instance` example, then restore it into `db2u-instance-dev`. Every step is a set of commands you run yourself, followed by a check. Don't start the next step until the check passes.
+This guide deploys the Db2uInstance recipe on a worked example, backs up the instance, and restores it into another namespace. Every step is a set of `oc` commands you run yourself, followed by a check. Don't start the next step until the check passes. Nothing here is scripted against the cluster: the only script, `render.sh`, fills the manifests with your values and writes them to local files.
 
-| Namespace | Role |
-| --- | --- |
-| `db2u-instance` | Source: live `Db2uInstance` `dwdb` (Fusion Application `db2u-instance`) |
-| `db2u-instance-dev` | Target: empty project you restore into |
-| `db2-operator` | Db2u operator only. Not backed up; no recipe hook runs here |
-| `recipe-helper` | Recipe helper pod that pauses and unpauses the instance |
-| `ibm-spectrum-fusion-ns` | Storage location, policy, recipes, transform, backups, restores |
-| `ibm-backup-restore` | Fusion DataProtectionApplication (Velero plugin) |
+## Prerequisites
 
-```text
-PolicyAssignment  db2u-instance-recipe-policy-assignment
-  Application     db2u-instance (discovered by Fusion)
-  BackupPolicy    db2u-instance-backup-policy → db2u-instance-backup-storage-location
-  Recipe          db2u-instance-helper-parent
-                    +-- discovers db2u-instance-helper-child (labels)
-                    +-- helper-exec hooks run in recipe-helper
-```
+- OpenShift Container Platform 4 (tested on 4.20.28)
+- IBM Fusion Backup & Restore 2.10 or newer (tested on Fusion HCI 2.12.2)
+- The Db2u operator installed in its own namespace, and a `Db2uInstance` on Db2 12.1.4 or newer
+- S3-compatible object storage you can create a bucket, policy and user on
+- `oc` logged in as cluster-admin, or as a user allowed to run every command in this guide
+
+## What you deploy
+
+The worked example backs up the `Db2uInstance` `dwdb` in **`db2u-instance`** and restores it into **`db2u-instance-dev`**.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/architecture-dark.svg">
   <img alt="Recipe topology: the parent recipe runs helper-exec in the helper pod, which patches the Db2uInstance and Db2uEngine; the child runs manage_snapshots in dashmpp-head-0; only db2u-instance is backed up." src="images/architecture-light.svg">
 </picture>
 
+Two namespaces are not in the figure: `db2u-instance-dev`, the empty project you restore into, and `ibm-backup-restore`, where Fusion runs its DataProtectionApplication (the Velero plugin). The backup policy, `db2u-instance-backup-policy`, writes to `db2u-instance-backup-storage-location`.
+
+The steps, in order:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/deploy-dark.svg">
+  <img alt="Deploy order: object storage, Db2 operator and instance, Fusion Backup and Restore, recipe helper, then back up and restore. Each step lists where it runs." src="images/deploy-light.svg">
+</picture>
+
+| Step | Section | Files |
+| --- | --- | --- |
+| 0. Set your values and render the manifests | [§0](#0-before-you-start) | [`.env.example`](../.env.example) |
+| 1. Object storage: bucket, policy, user, access key | [§1](#1-object-storage), [object-storage-setup.md](object-storage-setup.md) | none (done on the storage side) |
+| 2. Db2 operator scope, projects, instance | [§2](#2-db2-operator-projects-and-instance) | [`db2u-instance/`](../db2u-instance/) |
+| 3. Fusion: Velero plugin, storage location, policy, recipes, transform, assignment | [§3](#3-ibm-fusion-backup--restore) | [`ibm-backup-restore/`](../ibm-backup-restore/) |
+| 4. Recipe helper | [§4](#4-recipe-helper) | [`recipe-helper/`](../recipe-helper/) |
+| 5. Back up and restore | [operations.md](operations.md) | [`ibm-backup-restore/operations/`](../ibm-backup-restore/operations/) |
+
+Before the first backup, every line of [Ready to back up?](#ready-to-back-up) must pass.
+
 ---
 
 ## 0. Before you start
 
-You need Fusion Backup & Restore 2.10 or newer (tested on 2.12.2), the Db2u operator installed in `db2-operator`, Db2 12.1.4 or newer, S3-compatible object storage, and `oc` logged in as cluster-admin.
+### Set your values
 
-Your values go in one file, `.env`. The manifests in the repository are templates with `${NAME}` placeholders, and [`scripts/render.sh`](../scripts/render.sh) fills them from `.env` into `build/`. Every `oc apply` below uses the copy in `build/`. The script only writes files; it never contacts the cluster.
+Your values go in one file, `.env`. The manifests in the repository are templates with `${NAME}` placeholders, and [`scripts/render.sh`](../scripts/render.sh) fills them from `.env` into `build/`. Every `oc apply` below uses the copy in `build/`.
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in `.env`: the namespaces, `DB2_LICENSE`, `STORAGE_CLASS`, and the object storage bucket, endpoint, region and key pair from step 1. Each value is described in [`.env.example`](../.env.example). Then render, and load the namespace and storage class names into your shell:
+Fill in `.env`. Each key is described in [`.env.example`](../.env.example):
+
+| `.env` key | Fills | Example |
+| --- | --- | --- |
+| `FUSION_NS` | Namespace of the storage location, policy, recipes, transform, assignment, backups and restores | `ibm-spectrum-fusion-ns` |
+| `OP_NS` | Db2u operator namespace: OperatorGroup and `namespace-scope` ConfigMap | `db2-operator` |
+| `SOURCE_NS` | Instance namespace and Fusion Application; `namespaceMapping` source | `db2u-instance` |
+| `TARGET_NS` | Restore target project; `namespaceMapping` target | `db2u-instance-dev` |
+| `HELPER_NS` | Recipe helper namespace, the parent recipe's hook namespace, and its `namespaceMapping` entry | `recipe-helper` |
+| `DB2_LICENSE` | License in `db2u-instance.yaml` | |
+| `STORAGE_CLASS` | `storageClassName` of all three instance volumes | `isf-block-file-delete-sc` |
+| `S3_BUCKET_NAME`, `S3_ENDPOINT`, `S3_REGION` | Backup storage location, from step 1 | `db2u-instance-bucket` |
+| `S3_ACCESS_KEY_ID`, `S3_ACCESS_KEY` | Access key pair in `secret.yaml`, from step 1; `S3_ACCESS_KEY` is the secret key | |
+
+Two values are not in `.env`:
+
+| File | Set |
+| --- | --- |
+| [`recipe-helper/deployment.yaml`](../recipe-helper/deployment.yaml) | `image` (your mirrored UBI 9 minimal), in the template |
+| `build/ibm-backup-restore/operations/backup.yaml`, `restore.yaml` | `metadata.name` per run; `spec.backup` and `transformMapping.ENV` on the Restore, in the rendered copy ([operations.md](operations.md)) |
+
+The instance name, `dwdb`, is not a variable. If yours differs, change `metadata.name` in `db2u-instance.yaml` and `resourceNameRegex` in the Transform, and set `INSTANCE` below to match. Use your environment label in place of `dev`.
+
+`${GROUP...}` in the recipes and `${ENV}` in the Transform are Fusion's own variables. `render.sh` leaves them alone.
+
+### Render the manifests
+
+Render, then load the namespace and storage class names into your shell:
 
 ```bash
 ./scripts/render.sh
@@ -45,7 +86,15 @@ source build/env.sh
 INSTANCE=dwdb
 ```
 
-The script stops and names the problem if a value is missing or not a valid name. Run all later commands from the repository root, in the same shell. If you change `.env`, render again: the script rebuilds `build/` from scratch. `.env` and `build/` hold your license and keys; both are git-ignored.
+The script stops and names the problem if a value is missing or not a valid name. It only writes files; it never contacts the cluster. Run all later commands from the repository root, in the same shell. If you change `.env`, render again: the script rebuilds `build/` from scratch.
+
+`.env` and `build/` hold your license and keys; both are git-ignored. A pre-commit hook also blocks a commit that stages them, or that fills a template's license or key in place. Enable it in your clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It runs [`scripts/check-placeholders.sh`](../scripts/check-placeholders.sh).
 
 The commands use full resource names, such as `backups.data-protection.isf.ibm.com`, because a Fusion cluster also has Velero's `backups` and `restores`, and may have other `recipes` and `applications`. A short name can return the wrong kind.
 

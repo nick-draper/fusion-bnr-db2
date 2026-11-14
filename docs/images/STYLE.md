@@ -12,7 +12,7 @@ Each figure ships in four forms. The README and `docs/end-to-end.md` show them w
 | `<name>-light.png`, `<name>-dark.png` | Slides, wikis and anywhere SVG is not accepted. 2400 px wide, IBM Plex embedded in the pixels |
 | `<name>.svg` | One file that follows the viewer's colour scheme through `prefers-color-scheme` |
 
-Figures, numbered in README order: `deploy` (Fig 1), `layouts` (Fig 2), `architecture` (Fig 3), `transform` (Fig 4), `failover` (Fig 5). The number comes from the figure's position in `FIGS`, so a new figure goes where the README shows it.
+Figures: `layouts` (Fig 1), `deploy` (Fig 2), `architecture` (Fig 3), `workflow` (Fig 4), `transform` (Fig 5), `failover` (Fig 6). The number comes from the figure's position in `FIGS`, so reorder `FIGS` to renumber them.
 
 ## Change the wording
 
@@ -34,7 +34,7 @@ Do not edit the SVGs by hand. They are built from [`src/`](src/):
 | [`src/text.yaml`](src/text.yaml) | Every word in the figures. Edit wording here |
 | [`src/figures.js`](src/figures.js) | Layout, palettes, treatments and drawing code (`FIGS`). Edit here to move or resize boxes |
 | [`src/preview.html`](src/preview.html) | Open in a browser to see every figure in light and dark, and to compare palettes and treatments |
-| [`src/export.js`](src/export.js) | Checks the text fits, then writes all 25 files in this folder in the locked style |
+| [`src/export.js`](src/export.js) | Checks the text fits, then writes all 30 files in this folder in the locked style |
 | `src/text.js` | Written by the export from `text.yaml` so `preview.html` can show it. Don't edit |
 
 Needs Node 18 or newer. From `docs/images/src`:
@@ -51,7 +51,7 @@ npm run export
 
 ## Colour
 
-Every value is a step on IBM's Carbon colour scale. Light follows Carbon's g10 theme, dark follows g100. A role means the same thing in every figure.
+Every value is a step on IBM's Carbon colour scale. Light follows Carbon's white theme, dark follows g100. A role means the same thing in every figure.
 
 | Role | Means | Light: fill / stroke / text | Dark: fill / stroke / text |
 | --- | --- | --- | --- |
@@ -63,7 +63,7 @@ Every value is a step on IBM's Carbon colour scale. Light follows Carbon's g10 t
 
 | Base | Light | Dark |
 | --- | --- | --- |
-| Canvas | `#F4F4F4` | `#161616` |
+| Canvas | `#FFFFFF` | `#161616` |
 | Surface | `#FFFFFF` | `#262626` |
 | Rule | `#E0E0E0` | `#393939` |
 | Text | `#161616` | `#F4F4F4` |

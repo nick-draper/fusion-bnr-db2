@@ -2,52 +2,23 @@
 [![Db2uInstance](https://img.shields.io/badge/Db2uInstance-12.1.4%2B-0530ad)](docs/end-to-end.md)
 [![Last commit](https://img.shields.io/github/last-commit/nick-draper/fusion-bnr-db2)](https://github.com/nick-draper/fusion-bnr-db2/commits/main)
 
-# Db2uInstance backup and restore for IBM Fusion
+# IBM Fusion Backup & Restore Db2uInstance Recipe
 
-A production recipe for protecting a **Db2uInstance** with IBM Fusion Backup & Restore when the Db2u operator and the database are in different namespaces, and for restoring that backup into another namespace.
+A recipe for protecting and restoring a **Db2uInstance** with IBM Fusion Backup & Restore. It is designed for the requirements of real-world deployments:
 
-Everything needed to run it is here: the recipes, the transform, a small recipe helper, the Fusion and Db2 manifests for a worked example, step-by-step deployment commands with a check after each step, and a runbook with screenshots.
-
-- Maintenance mode is set and cleared from a recipe helper pod, so no hook runs in the operator namespace
-- Parent/child dynamic recipe with an allow-list of resource types
-- `inverseOp` undo of every completed quiesce step if a later backup step fails
+- Operator and database instance in separate namespaces
+- Targeted backups, with an allow-list of resource types
+- Dynamic parent/child recipes using Fusion variables
+- A dedicated helper pod runs the recipe hooks, so no hook runs in the operator namespace
 - Cross-namespace restore with a Transform, `namespaceMapping` and a target display name
-- Deployment you run command by command, with a check after each step, before a backup, and after a restore
+- Inverse operations undo maintenance mode and quiesce steps if a later step fails
 
-## Quick start
-
-You need Fusion Backup & Restore **2.10 or newer** (tested on 2.12.2), a Db2u operator in its own namespace, a `Db2uInstance` on Db2 **12.1.4 or newer**, S3-compatible object storage, and `oc` logged in as cluster-admin.
-
-The worked example backs up **`db2u-instance`** and restores it into **`db2u-instance-dev`**.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/deploy-dark.svg">
-  <img alt="Deploy order: object storage, Db2 operator and instance, Fusion Backup and Restore, recipe helper, then back up and restore. Each step lists where it runs." src="docs/images/deploy-light.svg">
-</picture>
-
-| Step | Guide | Files |
-| --- | --- | --- |
-| 1. Object storage: bucket, policy, user, access key | [object-storage-setup.md](docs/object-storage-setup.md) | none (done on the storage side) |
-| 2. Db2 operator scope, projects, instance | [end-to-end §2](docs/end-to-end.md#2-db2-operator-projects-and-instance) | [`db2u-instance/`](db2u-instance/) |
-| 3. Fusion: Velero plugin, storage location, policy, recipes, transform, assignment | [end-to-end §3](docs/end-to-end.md#3-ibm-fusion-backup--restore) | [`ibm-backup-restore/`](ibm-backup-restore/) |
-| 4. Recipe helper | [end-to-end §4](docs/end-to-end.md#4-recipe-helper) | [`recipe-helper/`](recipe-helper/) |
-| 5. Back up and restore | [operations.md](docs/operations.md) | [`ibm-backup-restore/operations/`](ibm-backup-restore/operations/) |
-
-Put your values in `.env` and render the manifests:
-
-```bash
-cp .env.example .env        # then fill it in
-./scripts/render.sh         # writes filled manifests to build/
-```
-
-There is no install script. `render.sh` only writes files; it never contacts the cluster. Then follow [docs/end-to-end.md](docs/end-to-end.md) from the top: it applies the files in `build/` with `oc`, one step at a time, with a check before you move on.
-
-Before the first backup, every line of [Ready to back up?](docs/end-to-end.md#ready-to-back-up) must pass. Backups, restores and their checks are in [operations.md](docs/operations.md).
+This repository includes a full [deployment guide](docs/end-to-end.md) (configuration, commands with a check after each step, and validation) and a [backup and restore runbook](docs/operations.md) with screenshots.
 
 ## Layout
 
 ```text
-README.md                         why, how it runs, quick start
+README.md                         why the recipe exists and how it runs
 .githooks/                        pre-commit hook that blocks a filled license or key
 docs/                             runbook, object storage, operations, diagrams, screenshots
 .env.example                      your values: namespaces, license, storage class, object storage
@@ -63,41 +34,6 @@ recipe-helper/                    project, service account, RBAC, deployment    
 scripts/                          render (.env to build/), placeholder check (pre-commit), discovery
 build/                            rendered manifests you apply (git-ignored)
 ```
-
-### What you edit
-
-Your values live in `.env`; the YAML files are templates with `${NAME}` placeholders, and [`scripts/render.sh`](scripts/render.sh) writes filled copies to `build/`.
-
-| `.env` key | Fills | Example |
-| --- | --- | --- |
-| `FUSION_NS` | Namespace of the storage location, policy, recipes, transform, assignment, backups and restores | `ibm-spectrum-fusion-ns` |
-| `OP_NS` | Db2u operator namespace: OperatorGroup and `namespace-scope` ConfigMap | `db2-operator` |
-| `SOURCE_NS` | Instance namespace and Fusion Application; `namespaceMapping` source | `db2u-instance` |
-| `TARGET_NS` | Restore target project; `namespaceMapping` target | `db2u-instance-dev` |
-| `HELPER_NS` | Recipe helper namespace, the parent recipe's hook namespace, and its `namespaceMapping` entry | `recipe-helper` |
-| `DB2_LICENSE` | License in `db2u-instance.yaml` | |
-| `STORAGE_CLASS` | `storageClassName` of all three instance volumes | `isf-block-file-delete-sc` |
-| `S3_BUCKET_NAME`, `S3_ENDPOINT`, `S3_REGION` | Backup storage location | `db2u-instance-bucket` |
-| `S3_ACCESS_KEY_ID`, `S3_ACCESS_KEY` | Access key pair in `secret.yaml`; `S3_ACCESS_KEY` is the secret key | |
-
-Two values are not in `.env`:
-
-| File | Set |
-| --- | --- |
-| [`recipe-helper/deployment.yaml`](recipe-helper/deployment.yaml) | `image` (your mirrored UBI 9 minimal), in the template |
-| `build/ibm-backup-restore/operations/backup.yaml`, `restore.yaml` | `metadata.name` per run; `spec.backup` and `transformMapping.ENV` on the Restore, in the rendered copy |
-
-`${GROUP...}` in the recipes and `${ENV}` in the Transform are Fusion's own variables. `render.sh` leaves them alone.
-
-`.env` and `build/` are git-ignored. A pre-commit hook also blocks a commit that stages them or that fills a template's license or key in place, once you enable it in your clone:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-It runs [`scripts/check-placeholders.sh`](scripts/check-placeholders.sh).
-
-The instance name, `dwdb`, is not a variable. If yours differs, change `metadata.name` in `db2u-instance.yaml` and `resourceNameRegex` in the Transform, and set `INSTANCE` in your shell (end-to-end §0). Use your environment label in place of `dev`.
 
 ## Why this recipe exists
 
@@ -158,15 +94,10 @@ Maintenance mode is an annotation (`db2u.databases.ibm.com/maintenance-pause-rec
 
 Every instance hook uses `${GROUP.db2u-db2uinstances.namespace}`, from a resource-type anchor group in the parent, so it follows `namespaceMapping` on restore.
 
-```text
-backup:  pause instance → pause engine → instance-backup → unpause engine → unpause instance
-restore: set target display name → instance-restore → wait 300 s
-         → unpause engine → unpause instance
-
-instance-backup:  resources → Db2uInstance → suspend → volumes → resume
-instance-restore: volumes → resources → Db2uInstance → engine Ready
-                  → snapshot restore → resume → instance Ready
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-dark.svg">
+  <img alt="Recipe workflow. Backup: the parent pauses the Db2uInstance and Db2uEngine from the helper pod; the child backs up configmaps, secrets and the Db2uInstance, suspends writes, snapshots the volumes and resumes; the parent unpauses the engine and the instance. On failure, inverseOps undo the completed steps. Restore: the parent sets the project display name; the child restores the volumes, configmaps, secrets and the paused Db2uInstance, waits for the engine, runs the snapshot restore and waits for the instance; the parent waits 300 seconds, then unpauses the engine and the instance." src="docs/images/workflow-light.svg">
+</picture>
 
 The `Db2uInstance` is backed up while paused, so it comes back paused. The parent clears maintenance at the end of the restore, after the child's readiness checks and a 300 s settle.
 

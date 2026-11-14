@@ -32,8 +32,8 @@
   const PALETTES = {
     carbon: {
       name: "IBM Carbon",
-      note: "Steps from IBM's Carbon colour scale: neutral Gray, Blue 60 for the recipe path, Teal 60 for the database, Yellow and Red for quiesce and failure. Light follows Carbon's g10 theme and dark follows g100. Made for IBM Plex.",
-      light: { bg:"#F4F4F4", panel:"#FFFFFF", line:"#E0E0E0", ink:"#161616", muted:"#525252", faint:"#8D8D8D", grid:"#E8E8E8",
+      note: "Steps from IBM's Carbon colour scale: neutral Gray, Blue 60 for the recipe path, Teal 60 for the database, Yellow and Red for quiesce and failure. Light follows Carbon's white theme and dark follows g100. Made for IBM Plex.",
+      light: { bg:"#FFFFFF", panel:"#FFFFFF", line:"#E0E0E0", ink:"#161616", muted:"#525252", faint:"#8D8D8D", grid:"#E8E8E8",
         priF:"#EDF5FF", priL:"#0F62FE", priI:"#0043CE", secF:"#D9FBFB", secL:"#007D79", secI:"#005D5D",
         neuF:"#F4F4F4", neuL:"#A8A8A8", neuI:"#525252", cauF:"#FCF4D6", cauL:"#B28600", cauI:"#684E00",
         danF:"#FFF1F1", danL:"#A2191F", danI:"#750E13" },
@@ -318,6 +318,28 @@
 
   const FIGS = [
     fig({
+      key: "layouts", file: "docs/images/layouts.svg", W: 1200, H: 456,
+      delta: "New figure. Each layout shows its backup scope, so the difference is what Fusion copies, not only where the boxes sit.",
+      draw: function (c) {
+        frame(c, 1200, 456);
+        // IBM sample: one namespace holds the operator and the instance, and the backup takes both.
+        group(c, { x: 40, y: 104, w: 540, h: 312, k: "sample" });
+        node(c, { x: 64, y: 152, w: 492, h: 240, role: "cau", k: "sample.namespace" });
+        chipBox(c, { x: 88, y: 216, w: 444, h: 64, k: "sample.operator" });
+        chipBox(c, { x: 88, y: 312, w: 444, h: 64, k: "sample.instance" });
+        arrow(c, { d: "M310 282V308", label: "sample.arrow", lx: 322, ly: 299, anchor: "start", on: "cau", max: 200 });
+
+        // Production: the operator namespace is GitOps-managed and outside every backup.
+        group(c, { x: 620, y: 104, w: 540, h: 312, k: "production" });
+        node(c, { x: 644, y: 152, w: 492, h: 100, role: "neu", k: "production.operator" });
+        node(c, { x: 644, y: 300, w: 236, h: 92, role: "sec", k: "production.instance_a" });
+        node(c, { x: 900, y: 300, w: 236, h: 92, role: "sec", k: "production.instance_b" });
+        arrow(c, { d: "M890 254V276H762V296", role: "neu" });
+        arrow(c, { d: "M890 276H1018V296", role: "neu" });
+        label(c, "production.arrow", 902, 270, "start", "group", null, 108);
+      }
+    }),
+    fig({
       key: "deploy", file: "docs/images/deploy.svg", W: 1200, H: 304,
       delta: "Steps connect in order, file paths are set in mono, and each step says where its commands run.",
       draw: function (c) {
@@ -331,40 +353,6 @@
           t(c, x + w / 2, y + h + 26, "steps." + i + ".runs_in", "m", 224, ' text-anchor="middle"');
         });
         extras(c, "steps", 5);
-      }
-    }),
-    fig({
-      key: "layouts", file: "docs/images/layouts.svg", W: 1200, H: 612,
-      delta: "New figure. Each layout shows its backup scope, so the difference is what Fusion copies, not only where the boxes sit.",
-      draw: function (c) {
-        frame(c, 1200, 612);
-        function bullets(x, y, role, base, bottom, w) {
-          t(c, x, y, base + ".list_title", "gh", w);
-          for (let i = 0; i < count(c, base + ".list"); i++) {
-            const by = y + 30 + i * 26;
-            if (by > bottom - 12) { c.warn.push({ key: c.figKey + "." + base + ".list." + i, problem: "no room", max: "panel height" }); continue; }
-            c.g.push('<rect x="' + x + '" y="' + (by - 8) + '" width="6" height="6" style="fill:var(--' + role + 'L)"/>');
-            t(c, x + 16, by, base + ".list." + i, "b", w - 16);
-          }
-        }
-
-        // IBM sample: one namespace holds the operator and the instance, and the backup takes both.
-        group(c, { x: 40, y: 104, w: 540, h: 468, k: "sample" });
-        node(c, { x: 64, y: 152, w: 492, h: 240, role: "cau", k: "sample.namespace" });
-        chipBox(c, { x: 88, y: 216, w: 444, h: 64, k: "sample.operator" });
-        chipBox(c, { x: 88, y: 312, w: 444, h: 64, k: "sample.instance" });
-        arrow(c, { d: "M310 282V308", label: "sample.arrow", lx: 322, ly: 299, anchor: "start", on: "cau", max: 200 });
-        bullets(64, 428, "cau", "sample", 572, 492);
-
-        // Production: the operator namespace is GitOps-managed and outside every backup.
-        group(c, { x: 620, y: 104, w: 540, h: 468, k: "production" });
-        node(c, { x: 644, y: 152, w: 492, h: 100, role: "neu", k: "production.operator" });
-        node(c, { x: 644, y: 300, w: 236, h: 92, role: "sec", k: "production.instance_a" });
-        node(c, { x: 900, y: 300, w: 236, h: 92, role: "sec", k: "production.instance_b" });
-        arrow(c, { d: "M890 254V276H762V296", role: "neu" });
-        arrow(c, { d: "M890 276H1018V296", role: "neu" });
-        label(c, "production.arrow", 902, 270, "start", "group", null, 108);
-        bullets(644, 428, "sec", "production", 572, 492);
       }
     }),
     fig({
@@ -395,6 +383,79 @@
         arrow(c, { d: "M1022 268V368", role: "pri" });
         label(c, "arrows.patch", 818, 289, "end", "group", null, 280);
         arrow(c, { d: "M830 532V440", role: "neu", label: "arrows.reconciles", lx: 842, ly: 521, anchor: "start", on: "group", max: 270 });
+      }
+    }),
+    fig({
+      key: "workflow", file: "docs/images/workflow.svg", W: 1200, H: 922,
+      delta: "New figure. Both workflows step by step, with the child's workflow boxed inside the parent's.",
+      draw: function (c) {
+        frame(c, 1200, 922);
+        const T = c.T, P = 48, RH = 34;   // row pitch and row height
+
+        const GW = 540, RX = 620;   // column width and the restore column's x
+
+        // One step: number, op name, and a short note on the right.
+        function row(x, y, w, role, k, n) {
+          const fill = T.kind === "panel" || T.kind === "flat" ? "var(--" + role + "F)" : "var(--panel)";
+          const stroke = T.kind === "flat" ? "none" : "var(--" + role + "L)";
+          c.g.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + RH + '" rx="' + Math.max(0, T.r - 2) + '" style="fill:' + fill + ";stroke:" + stroke + '" stroke-width="' + (T.sw || 1) + '"/>');
+          txt(c, x + 14, y + 22, (n < 10 ? "0" : "") + n, "lab", ' style="fill:var(--' + role + 'I)"');
+          const ow = t(c, x + 40, y + 22, k + ".op", "hm", w * 0.56);
+          t(c, x + w - 14, y + 22, k + ".detail", "m", w - 70 - ow, ' text-anchor="end"');
+        }
+
+        // A dashed box naming the recipe a run of steps comes from.
+        function source(x, y, w, h, role, key) {
+          c.g.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + T.r + '" style="fill:none;stroke:var(--' + role + 'L)" stroke-width="1" stroke-dasharray="4 3"/>');
+          t(c, x + 16, y + 22, key, "eye", w - 32, ' style="fill:var(--' + role + 'I)"', true);
+        }
+
+        // Both columns share one grid: `LEAD` parent rows, then a child box with
+        // `SLOTS` rows, then the trailing parent rows. A column with fewer steps
+        // leaves the gap above the child box (lead) or inside it.
+        const LEAD = 2, SLOTS = 6, TRAIL = 3, PTOP = 152, Y0 = PTOP + 34;
+        const childTop = Y0 + LEAD * P, childBottom = childTop + 34 + (SLOTS - 1) * P + RH + 12;
+        const parentBottom = childBottom + 14 + (TRAIL - 1) * P + RH + 12;
+        function column(gx, base, roles, from, to) {
+          const px = gx + 16, pw = GW - 32;            // parent box
+          const x = px + 16, w = pw - 32, cx = gx + GW / 2;
+          source(px, PTOP, pw, parentBottom - PTOP, "pri", base + ".parent");
+          let prev = null, n = 0, first = null, last = null;
+          function link(top) { if (prev != null) arrow(c, { d: "M" + cx + " " + prev + "V" + (top - 3) }); }
+          roles.forEach(function (role, i) {
+            let y;
+            if (i < from) y = Y0 + i * P;   // lead rows start at the top
+            else if (i < to) {
+              if (i === from) {
+                link(childTop);
+                source(x, childTop, w, childBottom - childTop, "sec", base + ".child");
+                prev = null;
+              }
+              y = childTop + 34 + (i - from) * P;
+            } else {
+              if (i === to) prev = childBottom;
+              y = childBottom + 14 + (i - to) * P;
+            }
+            link(y);
+            const inChild = i >= from && i < to;
+            row(inChild ? x + 16 : x, y, inChild ? w - 32 : w, role, base + ".steps." + i, ++n);
+            if (first == null) first = y;
+            prev = last = y + RH;
+          });
+          extras(c, base + ".steps", roles.length);
+          return { first: first, last: last };
+        }
+
+        // A note under each parent box: what happens on a failed backup, and what
+        // rewrites the objects on a restore.
+        const NH = 84, noteY = parentBottom + 16, GH = noteY + NH + 24 - 104;
+        group(c, { x: 40, y: 104, w: GW, h: GH, k: "backup" });
+        column(40, "backup", ["pri", "pri", "sec", "sec", "cau", "sec", "sec", "pri", "pri"], 2, 7);
+        node(c, { x: 56, y: noteY, w: GW - 32, h: NH, role: "dan", k: "backup.failure" });
+
+        group(c, { x: RX, y: 104, w: GW, h: GH, k: "restore" });
+        column(RX, "restore", ["pri", "sec", "sec", "sec", "neu", "sec", "neu", "pri", "pri", "pri"], 1, 7);
+        node(c, { x: RX + 16, y: noteY, w: GW - 32, h: NH, role: "cau", k: "restore.transform" });
       }
     }),
     fig({
