@@ -117,23 +117,79 @@
     flat: "No strokes. Tinted shapes on solid trays, separated by space alone."
   };
 
+  const LOCKED = { pal: "carbon", treat: "outline", type: "plex" };
+
+  /* ---------- Text ---------- */
+
+  // Wording comes from text.yaml (via setText); layout stays in this file.
+  let TEXT = {};
+  function setText(t) { TEXT = t || {}; }
+
+  function getPath(obj, path) {
+    return path.split(".").reduce(function (o, k) { return o == null ? undefined : o[/^\d+$/.test(k) ? +k : k]; }, obj);
+  }
+  function textOf(figKey, path) {
+    const v = getPath(TEXT[figKey], path);
+    return v == null ? "" : String(v);
+  }
+  // Number of entries in a text list (lines, bullets, rows).
+  function count(c, path) {
+    const v = getPath(TEXT[c.figKey], path);
+    return Array.isArray(v) ? v.length : v == null || v === "" ? 0 : 1;
+  }
+
+  // Font of each text class, for the fit check.
+  function fontOf(cls, T) {
+    const F = {
+      ttl: [0, 20, 600, -0.01], sub: [0, 13, 400, 0], fig: [1, 11, 500, 0.08], h: [0, 14, 600, 0], hm: [1, 13, 600, 0],
+      gh: [0, 13, 600, 0], b: [0, 12.5, 400, 0], m: [1, 11, 400, 0], mv: [1, 12, 500, 0], lab: [1, 10.5, 400, 0],
+      labd: [1, 10.5, 500, 0], hd: [1, 10.5, 500, 0.08],
+      eye: T && T.eyeMono ? [1, 10.5, 600, 0.06] : [0, 10.5, 600, 0.09]
+    }[cls] || [0, 13, 400, 0];
+    return { mono: !!F[0], size: F[1], weight: F[2], ls: F[3] };
+  }
+
+  // Width of a string in px. Node passes exact IBM Plex metrics and the browser
+  // passes canvas measureText; the fallback is a conservative estimate.
+  let MEASURE = null;
+  function setMeasure(fn) { MEASURE = fn; }
+  function widthOf(s, cls, T) {
+    const f = fontOf(cls, T);
+    let w = MEASURE ? MEASURE(s, f) : null;
+    if (w == null) w = s.length * f.size * (f.mono ? 0.6 : 0.56);
+    return w + s.length * f.ls * f.size;
+  }
+
   /* ---------- SVG primitives ---------- */
 
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const MW = 6.4; // mono label advance at 10.5px
 
   function txt(c, x, y, s, cls, extra) {
     c.g.push('<text x="' + x + '" y="' + y + '" class="' + cls + '"' + (extra || "") + ">" + esc(s) + "</text>");
   }
 
-  function frame(c, W, H, title, sub, fig) {
+  // Draw the text at `key`, check it fits in `max` px, and tag it for the editor.
+  function t(c, x, y, key, cls, max, extra, upper) {
+    let s = textOf(c.figKey, key);
+    if (!s) {
+      c.warn.push({ key: c.figKey + "." + key, problem: "missing" });
+      s = "[" + key + "]";
+    }
+    if (upper) s = s.toUpperCase();
+    const w = widthOf(s, cls, c.T);
+    if (max && w > max + 0.5) c.warn.push({ key: c.figKey + "." + key, problem: "too long", text: s, width: Math.round(w), max: Math.round(max) });
+    txt(c, x, y, s, cls, ' data-k="' + c.figKey + "." + key + '"' + (extra || ""));
+    return w;
+  }
+
+  function frame(c, W, H) {
     const T = c.T;
     c.g.push('<rect width="' + W + '" height="' + H + '" rx="' + T.frameR + '" style="fill:var(--bg)"/>');
     if (T.pattern) c.g.push('<rect width="' + W + '" height="' + H + '" rx="' + T.frameR + '" fill="url(#' + c.id + '-pat)"/>');
-    txt(c, 40, 52, title, "ttl");
-    txt(c, 40, 76, sub, "sub");
+    t(c, 40, 52, "title", "ttl", W - 160);
+    t(c, 40, 76, "subtitle", "sub", W - 80);
     // Figure numbers follow the order of FIGS, which is the order the README shows them in.
-    txt(c, W - 40, 52, c.fig || fig, "fig", ' text-anchor="end"');
+    txt(c, W - 40, 52, c.fig, "fig", ' text-anchor="end"');
   }
 
   function group(c, o) {
@@ -146,15 +202,21 @@
       // elevated and flat: a recessed solid tray, no border
       c.g.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + T.gr + '" style="fill:var(--grid)"/>');
     }
-    if (o.title) txt(c, x + 20, y + 30, o.title, "gh");
-    if (o.meta) txt(c, x + w - 20, y + 30, o.meta, "m", ' text-anchor="end"');
+    if (o.k) {
+      // Heading on the left, meta on the right, sharing one row.
+      const mw = widthOf(textOf(c.figKey, o.k + ".meta"), "m", T);
+      t(c, x + 20, y + 30, o.k + ".heading", "gh", w - 56 - mw);
+      t(c, x + w - 20, y + 30, o.k + ".meta", "m", w - 140, ' text-anchor="end"');
+    }
   }
 
   // Offsets inside a node, shared by every figure so baselines line up.
-  function off(c) { return c.T.header ? { eye: 20, title: 54, first: 76 } : { eye: 22, title: 46, first: 68 }; }
+  const O = { eye: 22, title: 46, first: 68, step: 19 };
 
+  // A box. Its text lives under `n.k`: label, title, lines (sans), code (mono),
+  // note (sans, after code) and aside (mono, right of the title).
   function node(c, n) {
-    const T = c.T, r = n.role || "neu", x = n.x, y = n.y, w = n.w, h = n.h, O = off(c);
+    const T = c.T, r = n.role || "neu", x = n.x, y = n.y, w = n.w, h = n.h, k = n.k;
     const dash = n.dim ? ' stroke-dasharray="4 3"' : "";
     c.g.push("<g" + (n.dim ? ' opacity="0.55"' : "") + ">");
     if (T.kind === "panel") {
@@ -168,27 +230,35 @@
     } else {
       c.g.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + T.r + '" style="fill:var(--' + r + 'F)' + (n.dim ? ";stroke:var(--" + r + 'L)" stroke-dasharray="4 3"' : '"') + "/>");
     }
-    const ex = T.kind === "outline" ? 30 : T.kind === "elevated" ? 30 : 16;
-    if (n.eye) txt(c, x + ex, y + O.eye, n.eye.toUpperCase(), "eye", ' style="fill:var(--' + r + 'I)"');
-    if (n.title) txt(c, x + 16, y + O.title, n.title, n.titleMono ? "hm" : "h");
-    (n.lines || []).forEach(function (l, i) { txt(c, x + 16, y + O.first + i * 19, l[1], l[0]); });
-    if (n.aside) txt(c, x + w - 16, y + O.title, n.aside, "m", ' text-anchor="end"');
-    if (n.fail) {
-      const cx = x + w - 22, cy = y + (T.header ? 15 : 22);
-      c.g.push('<circle cx="' + cx + '" cy="' + cy + '" r="9" style="fill:var(--danF);stroke:var(--danL)" stroke-width="1.25"/>');
-      c.g.push('<path d="M' + (cx - 3.5) + " " + (cy - 3.5) + "L" + (cx + 3.5) + " " + (cy + 3.5) + "M" + (cx + 3.5) + " " + (cy - 3.5) + "L" + (cx - 3.5) + " " + (cy + 3.5) + '" style="stroke:var(--danI)" stroke-width="1.6" stroke-linecap="round"/>');
-    }
+    const ex = T.kind === "outline" || T.kind === "elevated" ? 30 : 16;
+    if (count(c, k + ".label")) t(c, x + ex, y + O.eye, k + ".label", "eye", w - ex - 16, ' style="fill:var(--' + r + 'I)"', true);
+    let asideW = 0;
+    if (count(c, k + ".aside")) asideW = t(c, x + w - 16, y + O.title, k + ".aside", "m", w - 120, ' text-anchor="end"') + 16;
+    t(c, x + 16, y + O.title, k + ".title", n.titleMono ? "hm" : "h", w - 32 - asideW);
+
+    // Body rows in order: sans lines, then mono code, then a sans note.
+    const rows = [];
+    for (let i = 0; i < count(c, k + ".lines"); i++) rows.push([k + ".lines." + i, "b"]);
+    const nc = count(c, k + ".code");
+    const codeVal = getPath(TEXT[c.figKey], k + ".code");
+    for (let i = 0; i < nc; i++) rows.push([k + ".code" + (Array.isArray(codeVal) ? "." + i : ""), "m"]);
+    if (count(c, k + ".note")) rows.push([k + ".note", "b"]);
+    rows.forEach(function (row, i) {
+      const by = y + O.first + i * O.step;
+      if (by > y + h - 12) c.warn.push({ key: c.figKey + "." + row[0], problem: "no room", text: textOf(c.figKey, row[0]), max: "box height " + h });
+      t(c, x + 16, by, row[0], row[1], w - 32);
+    });
     c.g.push("</g>");
   }
 
-  // A small object inside a node (a CR or a pod).
+  // A small object inside a node (a CR or a pod): title and detail under `o.k`.
   function chipBox(c, o) {
     const T = c.T, r = o.role || "neu";
     const fill = T.kind === "elevated" ? "var(--bg)" : "var(--panel)";
     const stroke = T.kind === "panel" ? "var(--" + r + "L)" : T.kind === "outline" ? "var(--line)" : "none";
     c.g.push('<rect x="' + o.x + '" y="' + o.y + '" width="' + o.w + '" height="' + o.h + '" rx="' + Math.max(0, T.r - 4) + '" style="fill:' + fill + ";stroke:" + stroke + '" stroke-width="1"/>');
-    txt(c, o.x + 14, o.y + 27, o.title, "h");
-    if (o.sub) txt(c, o.x + 14, o.y + 46, o.sub, "m");
+    t(c, o.x + 14, o.y + 27, o.k + ".title", "h", o.w - 28);
+    if (count(c, o.k + ".detail")) t(c, o.x + 14, o.y + 46, o.k + ".detail", "m", o.w - 28);
   }
 
   // Background token under a label pill, chosen per treatment.
@@ -199,11 +269,13 @@
     return k === "panel" || k === "flat" ? "var(--" + where + "F)" : "var(--panel)";
   }
 
-  function label(c, s, x, y, anchor, where, cls) {
-    const w = s.length * MW + 12;
+  // An arrow label on a pill sized to the text.
+  function label(c, key, x, y, anchor, where, cls, max) {
+    cls = cls || "lab";
+    const w = widthOf(textOf(c.figKey, key) || key, cls, c.T) + 12;
     const rx = anchor === "start" ? x - 6 : anchor === "end" ? x - w + 6 : x - w / 2;
     c.g.push('<rect x="' + rx.toFixed(1) + '" y="' + (y - 12) + '" width="' + w.toFixed(1) + '" height="17" rx="3" style="fill:' + under(c, where) + '"/>');
-    txt(c, x, y, s, cls || "lab", ' text-anchor="' + anchor + '"');
+    t(c, x, y, key, cls, max, ' text-anchor="' + anchor + '"');
   }
 
   function arrow(c, a) {
@@ -211,7 +283,13 @@
     const col = r === "neu" ? "var(--muted)" : "var(--" + r + "L)";
     c.g.push('<path d="' + a.d + '" fill="none" style="stroke:' + col + '" stroke-width="' + c.T.aw + '" stroke-linejoin="round"' +
       (a.dash ? ' stroke-dasharray="' + a.dash + '"' : "") + (a.noHead ? "" : ' marker-end="url(#' + c.id + "-m-" + r + ')"') + "/>");
-    if (a.label) label(c, a.label, a.lx, a.ly, a.anchor || "middle", a.on || "bg", a.cls);
+    if (a.label) label(c, a.label, a.lx, a.ly, a.anchor || "middle", a.on || "bg", a.cls, a.max);
+  }
+
+  // Warn about list entries the layout has no box for.
+  function extras(c, path, slots) {
+    const n = count(c, path);
+    for (let i = slots; i < n; i++) c.warn.push({ key: c.figKey + "." + path + "." + i, problem: "no box for this entry; ignored" });
   }
 
   function defs(c) {
@@ -230,195 +308,159 @@
 
   /* ---------- Figures ---------- */
 
+  // Each entry is layout only. Its wording is TEXT[key]; name, alt and cap read from there.
+  function fig(o) {
+    Object.defineProperty(o, "name", { get: function () { return textOf(o.key, "title"); } });
+    Object.defineProperty(o, "alt", { get: function () { return textOf(o.key, "alt"); } });
+    Object.defineProperty(o, "cap", { get: function () { return textOf(o.key, "caption"); } });
+    return o;
+  }
+
   const FIGS = [
-    {
-      key: "deploy", file: "docs/images/deploy.svg", name: "Deploy order", W: 1200, H: 304,
-      alt: "Deploy order: object storage, Db2 operator and instance, Fusion Backup and Restore, recipe helper, then back up and restore. Each step lists where it runs.",
-      cap: "Five steps, in order. docs/end-to-end.md gives the commands and a check for each one.",
+    fig({
+      key: "deploy", file: "docs/images/deploy.svg", W: 1200, H: 304,
       delta: "Steps connect in order, file paths are set in mono, and each step says where its commands run.",
       draw: function (c) {
-        frame(c, 1200, 304, "Deploy order", "Five steps, in order. docs/end-to-end.md has the commands and a check for each.", "FIG 1");
-        const cards = [
-          { role: "neu", eye: "01 · Storage", title: "Object storage", lines: [["b", "Bucket, policy, user"], ["b", "Access key, endpoint CA"], ["m", "object-storage-setup.md"]] },
-          { role: "sec", eye: "02 · Db2", title: "Operator and instance", lines: [["b", "OperatorGroup targets"], ["b", "namespace-scope ConfigMap"], ["b", "Node environment labels"], ["m", "db2u-instance/"]] },
-          { role: "pri", eye: "03 · Fusion", title: "Backup & Restore", lines: [["b", "Velero plugin on the DPA"], ["b", "Location, policy, recipes"], ["b", "Transform, assignment"], ["m", "ibm-backup-restore/"]] },
-          { role: "pri", eye: "04 · Helper", title: "Recipe helper", lines: [["b", "Project, service account"], ["b", "ClusterRole and binding"], ["b", "UBI deployment with curl"], ["m", "recipe-helper/"]] },
-          { role: "neu", eye: "05 · Operations", title: "Back up and restore", lines: [["b", "Backup from UI or CR"], ["b", "Restore maps helper ns"], ["b", "Check enterprise license"], ["m", "operations/*.yaml"]] }
-        ];
-        const y = 104, w = 212, h = 148;
-        cards.forEach(function (k, i) {
+        frame(c, 1200, 304);
+        const roles = ["neu", "sec", "pri", "pri", "neu"], y = 104, w = 212, h = 148;
+        roles.forEach(function (role, i) {
           const x = 40 + i * 228;
-          node(c, Object.assign({ x: x, y: y, w: w, h: h }, k));
+          node(c, { x: x, y: y, w: w, h: h, role: role, k: "steps." + i });
           if (i < 4) arrow(c, { d: "M" + (x + w + 2) + " " + (y + 42) + "H" + (x + w + 14), role: "neu" });
+          // Where each step's commands run.
+          t(c, x + w / 2, y + h + 26, "steps." + i + ".runs_in", "m", 224, ' text-anchor="middle"');
         });
-        // Where each step's commands run.
-        ["storage console", "oc · cluster-admin", "oc · ibm-spectrum-fusion-ns", "oc · every cluster", "Fusion UI or oc"].forEach(function (s, i) {
-          txt(c, 40 + i * 228 + w / 2, y + h + 26, s, "m", ' text-anchor="middle"');
-        });
+        extras(c, "steps", 5);
       }
-    },
-    {
-      key: "layouts", file: "docs/images/layouts.svg", name: "Namespace layouts", W: 1200, H: 612,
-      alt: "Namespace layouts: IBM's sample puts the Db2u operator and the instance in one namespace, so a backup carries both. The production layout gives the operator its own GitOps-managed namespace and each instance its own namespace and backup scope.",
-      cap: "IBM's sample backs up the operator with the database. In production, GitOps owns the operator and Fusion protects each instance namespace on its own.",
+    }),
+    fig({
+      key: "layouts", file: "docs/images/layouts.svg", W: 1200, H: 612,
       delta: "New figure. Each layout shows its backup scope, so the difference is what Fusion copies, not only where the boxes sit.",
       draw: function (c) {
-        frame(c, 1200, 612, "Namespace layouts", "IBM's sample keeps the operator with the instance. Production clusters give the operator its own namespace.", "");
-        function bullets(x, y, role, title, items) {
-          txt(c, x, y, title, "gh");
-          items.forEach(function (s, i) {
+        frame(c, 1200, 612);
+        function bullets(x, y, role, base, bottom, w) {
+          t(c, x, y, base + ".list_title", "gh", w);
+          for (let i = 0; i < count(c, base + ".list"); i++) {
             const by = y + 30 + i * 26;
+            if (by > bottom - 12) { c.warn.push({ key: c.figKey + "." + base + ".list." + i, problem: "no room", max: "panel height" }); continue; }
             c.g.push('<rect x="' + x + '" y="' + (by - 8) + '" width="6" height="6" style="fill:var(--' + role + 'L)"/>');
-            txt(c, x + 16, by, s, "b");
-          });
+            t(c, x + 16, by, base + ".list." + i, "b", w - 16);
+          }
         }
 
         // IBM sample: one namespace holds the operator and the instance, and the backup takes both.
-        group(c, { x: 40, y: 104, w: 540, h: 468, title: "IBM sample layout", meta: "one namespace" });
-        node(c, { x: 64, y: 152, w: 492, h: 240, role: "cau", eye: "Namespace · backup scope", title: "Shared namespace" });
-        chipBox(c, { x: 88, y: 216, w: 444, h: 64, title: "Db2u operator", sub: "Subscription · OperatorGroup · CSV · manager pod" });
-        chipBox(c, { x: 88, y: 312, w: 444, h: 64, title: "Db2uInstance", sub: "volumes · configmaps · secrets" });
-        arrow(c, { d: "M310 282V308", label: "reconciles", lx: 322, ly: 299, anchor: "start", on: "cau" });
-        bullets(64, 428, "cau", "Trade-offs of sharing a namespace", [
-          "Project access spans the operator and the database",
-          "Backups carry operator and OLM objects",
-          "Deleting the project removes both",
-          "Restores only into the same namespace"
-        ]);
+        group(c, { x: 40, y: 104, w: 540, h: 468, k: "sample" });
+        node(c, { x: 64, y: 152, w: 492, h: 240, role: "cau", k: "sample.namespace" });
+        chipBox(c, { x: 88, y: 216, w: 444, h: 64, k: "sample.operator" });
+        chipBox(c, { x: 88, y: 312, w: 444, h: 64, k: "sample.instance" });
+        arrow(c, { d: "M310 282V308", label: "sample.arrow", lx: 322, ly: 299, anchor: "start", on: "cau", max: 200 });
+        bullets(64, 428, "cau", "sample", 572, 492);
 
         // Production: the operator namespace is GitOps-managed and outside every backup.
-        group(c, { x: 620, y: 104, w: 540, h: 468, title: "Production layout", meta: "namespace per instance" });
-        node(c, { x: 644, y: 152, w: 492, h: 100, role: "neu", eye: "Namespace · not backed up", title: "db2-operator", lines: [["m", "Db2u operator · managed by GitOps"]] });
-        node(c, { x: 644, y: 300, w: 236, h: 92, role: "sec", eye: "Namespace · backup scope", title: "Instance A", lines: [["m", "Db2uInstance + volumes"]] });
-        node(c, { x: 900, y: 300, w: 236, h: 92, role: "sec", eye: "Namespace · backup scope", title: "Instance B", lines: [["m", "Db2uInstance + volumes"]] });
+        group(c, { x: 620, y: 104, w: 540, h: 468, k: "production" });
+        node(c, { x: 644, y: 152, w: 492, h: 100, role: "neu", k: "production.operator" });
+        node(c, { x: 644, y: 300, w: 236, h: 92, role: "sec", k: "production.instance_a" });
+        node(c, { x: 900, y: 300, w: 236, h: 92, role: "sec", k: "production.instance_b" });
         arrow(c, { d: "M890 254V276H762V296", role: "neu" });
         arrow(c, { d: "M890 276H1018V296", role: "neu" });
-        label(c, "reconciles", 902, 270, "start", "group");
-        bullets(644, 428, "sec", "Benefits of separate namespaces", [
-          "Access scoped to each instance",
-          "Operator rebuilt from GitOps, not restored",
-          "Fusion backs up only the database",
-          "Restore into another namespace"
-        ]);
+        label(c, "production.arrow", 902, 270, "start", "group", null, 108);
+        bullets(644, 428, "sec", "production", 572, 492);
       }
-    },
-    {
-      key: "architecture", file: "docs/images/architecture.svg", name: "Recipe topology", W: 1200, H: 656,
-      alt: "Recipe topology: the policy assignment names the parent recipe, which finds the child by label. The parent runs helper-exec in the helper pod, which patches the Db2uInstance and Db2uEngine. The child runs manage_snapshots in dashmpp-head-0. The operator reconciles but runs no hooks. Only db2u-instance is backed up.",
-      cap: "The parent pauses the instance through API calls from the helper pod, the child execs into dashmpp-head-0, and only db2u-instance is backed up.",
+    }),
+    fig({
+      key: "architecture", file: "docs/images/architecture.svg", W: 1200, H: 656,
       delta: "Arrows now name each call and land on the object they touch. The step lists moved out; the README already has them under How it works.",
       draw: function (c) {
-        frame(c, 1200, 656, "Recipe topology", "The parent pauses the instance from the helper pod. The child snapshots it. Nothing runs in db2-operator.", "FIG 2");
-        group(c, { x: 40, y: 104, w: 360, h: 512, title: "IBM Fusion", meta: "ibm-spectrum-fusion-ns" });
-        group(c, { x: 500, y: 104, w: 660, h: 512, title: "OpenShift cluster", meta: "workload namespaces" });
+        frame(c, 1200, 656);
+        group(c, { x: 40, y: 104, w: 360, h: 512, k: "fusion" });
+        group(c, { x: 500, y: 104, w: 660, h: 512, k: "cluster" });
 
-        node(c, { x: 72, y: 152, w: 296, h: 100, role: "neu", eye: "Assignment", title: "Policy assignment", lines: [["m", "recipe: db2u-instance-helper-parent"]] });
-        node(c, { x: 72, y: 296, w: 296, h: 140, role: "pri", eye: "Parent recipe", title: "db2u-instance-helper-parent", lines: [["b", "Pause and unpause the instance"], ["b", "Set the target display name"], ["m", "hooks run in the helper pod"]] });
-        node(c, { x: 72, y: 484, w: 296, h: 116, role: "sec", eye: "Child recipe", title: "db2u-instance-helper-child", lines: [["b", "instance-backup, instance-restore"], ["m", "found by parent-recipe label"]] });
-        arrow(c, { d: "M220 254V292", label: "names", lx: 232, ly: 278, anchor: "start", on: "group" });
-        arrow(c, { d: "M220 438V480", label: "finds by label", lx: 232, ly: 464, anchor: "start", on: "group" });
+        node(c, { x: 72, y: 152, w: 296, h: 100, role: "neu", k: "assignment" });
+        node(c, { x: 72, y: 296, w: 296, h: 140, role: "pri", k: "parent" });
+        node(c, { x: 72, y: 484, w: 296, h: 116, role: "sec", k: "child" });
+        arrow(c, { d: "M220 254V292", label: "arrows.names", lx: 232, ly: 278, anchor: "start", on: "group", max: 150 });
+        arrow(c, { d: "M220 438V480", label: "arrows.finds", lx: 232, ly: 464, anchor: "start", on: "group", max: 150 });
 
-        node(c, { x: 532, y: 152, w: 596, h: 116, role: "pri", eye: "Namespace", title: "db2u-bnr-recipe-helper", lines: [["b", "Helper pod: curl and its own service account"], ["m", "not backed up · every Restore maps it to itself"]] });
-        node(c, { x: 532, y: 300, w: 596, h: 200, role: "sec", eye: "Namespace · backup scope", title: "db2u-instance" });
-        chipBox(c, { x: 556, y: 372, w: 164, h: 64, role: "sec", title: "dashmpp-head-0", sub: "container db2u" });
-        chipBox(c, { x: 748, y: 372, w: 164, h: 64, role: "sec", title: "Db2uInstance", sub: "dwdb" });
-        chipBox(c, { x: 940, y: 372, w: 164, h: 64, role: "sec", title: "Db2uEngine", sub: "db2wh engine" });
-        txt(c, 846, 476, "configmaps · secrets · PVCs", "m");
-        node(c, { x: 532, y: 532, w: 596, h: 68, role: "neu", eye: "Namespace", title: "db2-operator", aside: "not backed up · no recipe hooks" });
+        node(c, { x: 532, y: 152, w: 596, h: 116, role: "pri", k: "helper" });
+        node(c, { x: 532, y: 300, w: 596, h: 200, role: "sec", k: "instance" });
+        chipBox(c, { x: 556, y: 372, w: 164, h: 64, role: "sec", k: "pod" });
+        chipBox(c, { x: 748, y: 372, w: 164, h: 64, role: "sec", k: "cr" });
+        chipBox(c, { x: 940, y: 372, w: 164, h: 64, role: "sec", k: "engine" });
+        t(c, 846, 476, "instance.contents", "m", 258);
+        node(c, { x: 532, y: 532, w: 596, h: 68, role: "neu", k: "operator" });
 
-        arrow(c, { d: "M368 330H450V210H528", role: "pri", label: "helper-exec", lx: 409, ly: 322, on: "bg" });
-        arrow(c, { d: "M368 542H470V456H638V440", role: "sec", label: "exec manage_snapshots", lx: 548, ly: 460, anchor: "start", on: "sec" });
+        arrow(c, { d: "M368 330H450V210H528", role: "pri", label: "arrows.helper_exec", lx: 409, ly: 322, on: "bg", max: 80 });
+        arrow(c, { d: "M368 542H470V456H638V440", role: "sec", label: "arrows.snapshots", lx: 548, ly: 460, anchor: "start", on: "sec", max: 280 });
         arrow(c, { d: "M830 268V368", role: "pri" });
         arrow(c, { d: "M1022 268V368", role: "pri" });
-        label(c, "PATCH maintenance-pause-reconcile", 818, 289, "end", "group");
-        arrow(c, { d: "M830 532V440", role: "neu", label: "reconciles", lx: 842, ly: 521, anchor: "start", on: "group" });
+        label(c, "arrows.patch", 818, 289, "end", "group", null, 280);
+        arrow(c, { d: "M830 532V440", role: "neu", label: "arrows.reconciles", lx: 842, ly: 521, anchor: "start", on: "group", max: 270 });
       }
-    },
-    {
-      key: "transform", file: "docs/images/transform.svg", name: "Cross-namespace restore", W: 1200, H: 580,
-      alt: "Cross-namespace restore: namespaceMapping moves objects from db2u-instance to db2u-instance-dev, the Transform rewrites affinity and environment labels from prod to dev and adds backup=restored on the instance and PVCs, and helper-exec sets the Project display name. The helper namespace maps to itself.",
-      cap: "On a restore into db2u-instance-dev, namespaceMapping moves the objects, the Transform rewrites the environment fields, and the helper renames the Project.",
+    }),
+    fig({
+      key: "transform", file: "docs/images/transform.svg", W: 1200, H: 580,
       delta: "Drawn as a field-by-field diff, so each before and after value sits beside the mechanism that changes it. Adds the PVC labels.",
       draw: function (c) {
-        frame(c, 1200, 580, "Cross-namespace restore", "What each field on the restored objects becomes, and what changes it.", "FIG 3");
+        frame(c, 1200, 580);
         group(c, { x: 24, y: 96, w: 1152, h: 452 });
         const hy = 126;
-        txt(c, 48, hy, "FIELD", "hd");
-        txt(c, 340, hy, "SOURCE · db2u-instance", "hd");
-        txt(c, 700, hy, "CHANGED BY", "hd", ' text-anchor="middle"');
-        txt(c, 860, hy, "TARGET · db2u-instance-dev", "hd");
+        t(c, 48, hy, "headers.field", "hd", 280);
+        t(c, 340, hy, "headers.source", "hd", 340);
+        t(c, 700, hy, "headers.changed_by", "hd", 260, ' text-anchor="middle"');
+        t(c, 860, hy, "headers.target", "hd", 292);
         c.g.push('<path d="M48 138H1152" style="stroke:var(--line)" stroke-width="1"/>');
-        const rows = [
-          ["Namespace", "metadata.namespace", "db2u-instance", "namespaceMapping", "neu", "db2u-instance-dev"],
-          ["Db2uInstance", "affinity … values[0]", "prod", "Transform · replace", "pri", "dev"],
-          ["Db2uInstance", "label my.cluster/environment", "prod", "Transform · replace", "pri", "dev"],
-          ["Db2uInstance", "label backup", "(none)", "Transform · add", "pri", "restored"],
-          ["PVCs", "labels environment, backup", "prod, (none)", "Transform · add", "pri", "dev, restored"],
-          ["Project", "openshift.io/display-name", "DB2U Instance (PROD)", "helper-exec · set-display-name", "pri", "DB2U Instance (Restored)"],
-          ["Helper namespace", "fixed in the parent recipe", "db2u-bnr-recipe-helper", "namespaceMapping", "neu", "db2u-bnr-recipe-helper", true]
-        ];
-        const rh = 56;
-        rows.forEach(function (r, i) {
-          const y0 = 138 + i * rh, cy = y0 + 29, role = r[4], same = r[6];
-          txt(c, 48, y0 + 25, r[0], "h");
-          txt(c, 48, y0 + 44, r[1], "m");
-          txt(c, 340, y0 + 33, r[2], "mv", ' style="fill:var(--muted)"');
-          const cw = r[3].length * MW + 22, cl = 700 - cw / 2, cr = 700 + cw / 2;
-          arrow(c, { d: "M560 " + cy + "H" + (cl - 6), role: role, noHead: true, dash: "2 3" });
-          arrow(c, { d: "M" + (cr + 6) + " " + cy + "H850", role: role });
-          const T = c.T;
-          c.g.push('<rect x="' + cl.toFixed(1) + '" y="' + (cy - 12) + '" width="' + cw.toFixed(1) + '" height="24" rx="12" style="fill:var(--' + role + "F);stroke:" + (T.kind === "flat" ? "none" : "var(--" + role + "L)") + '" stroke-width="1"/>');
-          txt(c, 700, cy + 4, r[3], "lab", ' text-anchor="middle" style="fill:var(--' + role + 'I)"');
-          if (same) {
-            txt(c, 860, y0 + 33, r[5], "mv", ' style="fill:var(--muted)"');
-            txt(c, 1152, y0 + 33, "unchanged", "m", ' text-anchor="end"');
+        // Role per row: neutral for namespaceMapping, primary for Fusion actions. The last row is unchanged.
+        const roles = ["neu", "pri", "pri", "pri", "pri", "pri", "neu"], same = 6, rh = 56;
+        const unchangedW = widthOf(textOf(c.figKey, "unchanged"), "m", c.T);
+        roles.forEach(function (role, i) {
+          const y0 = 138 + i * rh, cy = y0 + 29, k = "rows." + i;
+          t(c, 48, y0 + 25, k + ".object", "h", 280);
+          t(c, 48, y0 + 44, k + ".field", "m", 280);
+          t(c, 340, y0 + 33, k + ".source", "mv", 208, ' style="fill:var(--muted)"');
+          const cw = widthOf(textOf(c.figKey, k + ".changed_by"), "lab", c.T) + 22, cl = 700 - cw / 2, cr = 700 + cw / 2;
+          arrow(c, { d: "M560 " + cy + "H" + Math.max(560, cl - 6), role: role, noHead: true, dash: "2 3" });
+          arrow(c, { d: "M" + Math.min(844, cr + 6) + " " + cy + "H850", role: role });
+          c.g.push('<rect x="' + cl.toFixed(1) + '" y="' + (cy - 12) + '" width="' + cw.toFixed(1) + '" height="24" rx="12" style="fill:var(--' + role + "F);stroke:" + (c.T.kind === "flat" ? "none" : "var(--" + role + "L)") + '" stroke-width="1"/>');
+          t(c, 700, cy + 4, k + ".changed_by", "lab", 250, ' text-anchor="middle" style="fill:var(--' + role + 'I)"');
+          if (i === same) {
+            t(c, 860, y0 + 33, k + ".target", "mv", 292 - unchangedW - 16, ' style="fill:var(--muted)"');
+            t(c, 1152, y0 + 33, "unchanged", "m", 120, ' text-anchor="end"');
           } else {
-            const tw = r[5].length * 7.2 + 20;
+            const tw = widthOf(textOf(c.figKey, k + ".target"), "mv", c.T) + 20;
             c.g.push('<rect x="856" y="' + (cy - 13) + '" width="' + tw.toFixed(1) + '" height="26" rx="5" style="fill:var(--' + role + 'F)"/>');
-            txt(c, 866, y0 + 33, r[5], "mv", ' style="fill:var(--' + role + 'I)"');
+            t(c, 866, y0 + 33, k + ".target", "mv", 276, ' style="fill:var(--' + role + 'I)"');
           }
-          if (i < rows.length - 1) c.g.push('<path d="M48 ' + (y0 + rh) + 'H1152" style="stroke:var(--line)" stroke-width="1" stroke-dasharray="1 3"/>');
+          if (i < roles.length - 1) c.g.push('<path d="M48 ' + (y0 + rh) + 'H1152" style="stroke:var(--line)" stroke-width="1" stroke-dasharray="1 3"/>');
         });
+        extras(c, "rows", roles.length);
       }
-    },
-    {
-      key: "failover", file: "docs/images/failover.svg", name: "Backup failure undo", W: 1200, H: 452,
-      alt: "Backup failure undo: the backup pauses the instance, pauses the engine, suspends writes and snapshots the volumes. A failure at any of the later steps runs the inverseOp of every step already completed, newest first: resume writes, unpause the engine, unpause the instance.",
-      cap: "A failure at any step runs the inverseOp of every step already completed, newest first. A failed suspend unpauses the engine and then the instance; a failed snapshot also resumes writes first.",
+    }),
+    fig({
+      key: "failover", file: "docs/images/failover.svg", W: 1200, H: 452,
       delta: "Each undo now sits under the step whose failure starts it, so every failure point drops straight into the undo chain.",
       draw: function (c) {
-        frame(c, 1200, 452, "Backup failure undo", "Each quiesce step names an inverseOp. A failure at any later step runs the completed steps' inverseOps, newest first.", "FIG 4");
+        frame(c, 1200, 452);
         const y = 112, w = 212, h = 104;
-        const fwd = [
-          { role: "pri", eye: "1 · Pause", title: "Db2uInstance", lines: [["m", "maintenance-mode-on"]] },
-          { role: "pri", eye: "2 · Pause", title: "Db2uEngine", lines: [["m", "engine-maintenance-mode-on"]] },
-          { role: "cau", eye: "3 · Quiesce", title: "suspend", lines: [["m", "manage_snapshots"]] },
-          { role: "neu", eye: "4 · Snapshot", title: "db2u-volumes", lines: [["m", "volume group"]] },
-          { role: "sec", eye: "5 · Resume", title: "resume", lines: [["m", "normal path"]] }
-        ];
-        fwd.forEach(function (k, i) {
+        ["pri", "pri", "cau", "neu", "sec"].forEach(function (role, i) {
           const x = 40 + i * 228;
-          node(c, Object.assign({ x: x, y: y, w: w, h: h }, k));
+          node(c, { x: x, y: y, w: w, h: h, role: role, k: "steps." + i });
           if (i < 4) arrow(c, { d: "M" + (x + w + 2) + " " + (y + 42) + "H" + (x + w + 14), role: "neu" });
         });
+        extras(c, "steps", 5);
         // Undo k sits under the step whose failure starts it, so each failure drops straight down.
         const uy = 300, uh = 116;
-        const undo = [
-          { x: 268, eye: "Undo · inverseOp", title: "Unpause instance", lines: [["m", "maintenance-mode-off"], ["b", "Reverses step 1"]] },
-          { x: 496, eye: "Undo · inverseOp", title: "Unpause engine", lines: [["m", "engine-maintenance-mode-off"], ["b", "Reverses step 2"]] },
-          { x: 724, eye: "Undo · inverseOp", title: "Resume writes", lines: [["m", "manage_snapshots resume"], ["b", "Reverses step 3"]] }
-        ];
-        undo.forEach(function (u) {
-          node(c, Object.assign({ y: uy, w: w, h: uh, role: "dan" }, u));
-          const cx = u.x + w / 2;
-          arrow(c, { d: "M" + cx + " " + (y + h + 2) + "V" + (uy - 3), role: "dan", label: "fails", lx: cx, ly: 262, on: "bg", cls: "labd" });
+        [268, 496, 724].forEach(function (x, i) {
+          node(c, { x: x, y: uy, w: w, h: uh, role: "dan", k: "undo." + i });
+          const cx = x + w / 2;
+          arrow(c, { d: "M" + cx + " " + (y + h + 2) + "V" + (uy - 3), role: "dan", label: "fails", lx: cx, ly: 262, on: "bg", cls: "labd", max: 190 });
         });
-        node(c, { x: 40, y: uy, w: w, h: uh, role: "sec", eye: "Result", title: "Source in service", lines: [["m", "writable, reconciling"], ["b", "Not a failover"]] });
+        extras(c, "undo", 3);
+        node(c, { x: 40, y: uy, w: w, h: uh, role: "sec", k: "result" });
         arrow(c, { d: "M722 " + (uy + 46) + "H710", role: "dan" });
         arrow(c, { d: "M494 " + (uy + 46) + "H482", role: "dan" });
         arrow(c, { d: "M266 " + (uy + 46) + "H254", role: "dan" });
       }
-    }
+    })
   ];
 
   /* ---------- Assembly ---------- */
@@ -449,18 +491,24 @@
     return css;
   }
 
-  function buildSVG(fig, s, id, forExport) {
-    const c = { T: TREATS[s.treat], id: id, g: [], fig: "FIG " + (FIGS.indexOf(fig) + 1) };
+  // Build one figure. `forExport` adds width and height and drops the editor tags.
+  function render(fig, s, id, forExport) {
+    const c = { T: TREATS[s.treat], id: id, g: [], warn: [], figKey: fig.key, fig: "FIG " + (FIGS.indexOf(fig) + 1) };
     fig.draw(c);
+    let body = c.g.join("");
+    if (forExport) body = body.replace(/ data-k="[^"]*"/g, "");
     const head = '<svg xmlns="http://www.w3.org/2000/svg" id="' + id + '" viewBox="0 0 ' + fig.W + " " + fig.H + '"' +
       (forExport ? ' width="' + fig.W + '" height="' + fig.H + '"' : "") +
       ' role="img" aria-labelledby="' + id + "-t " + id + '-d">';
-    return head + '<title id="' + id + '-t">' + esc(fig.name) + '</title><desc id="' + id + '-d">' + esc(fig.alt) + "</desc>" +
-      "<style>" + styleBlock(id, s) + "</style>" + defs(c) + c.g.join("") + "</svg>";
+    const svg = head + '<title id="' + id + '-t">' + esc(fig.name) + '</title><desc id="' + id + '-d">' + esc(fig.alt) + "</desc>" +
+      "<style>" + styleBlock(id, s) + "</style>" + defs(c) + body + "</svg>";
+    return { svg: svg, warnings: c.warn };
   }
+  function buildSVG(fig, s, id, forExport) { return render(fig, s, id, forExport).svg; }
+  // Text problems for one figure in the locked style: missing keys, text too long for its box.
+  function check(fig) { return render(fig, Object.assign({ mode: "light" }, LOCKED), "chk", false).warnings; }
 
-
-  const api = { TYPE, ROLES, BASE, PALETTES, TREATS, TREAT_NOTES, FIGS, buildSVG, esc, LOCKED: { pal: "carbon", treat: "outline", type: "plex" } };
+  const api = { TYPE, ROLES, BASE, PALETTES, TREATS, TREAT_NOTES, FIGS, buildSVG, render, check, setText, setMeasure, fontOf, esc, LOCKED };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Db2uFigures = api;
 })(this);

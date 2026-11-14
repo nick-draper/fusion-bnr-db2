@@ -1,6 +1,6 @@
 # Operations — backup and restore
 
-Step 5 of [end-to-end.md](end-to-end.md). Steps 1–4 must be done and every line of [Ready to back up?](end-to-end.md#ready-to-back-up) must pass. The commands use the shell names set in [end-to-end §0](end-to-end.md#0-before-you-start) (`FUSION_NS`, `SRC_NS`, `TGT_NS`, `INSTANCE`).
+Step 5 of [end-to-end.md](end-to-end.md). Steps 1–4 must be done and every line of [Ready to back up?](end-to-end.md#ready-to-back-up) must pass. The commands use the shell names set in [end-to-end §0](end-to-end.md#0-before-you-start) (`FUSION_NS`, `SOURCE_NS`, `TARGET_NS`, `INSTANCE`, from `build/env.sh`).
 
 | File | Role |
 | --- | --- |
@@ -40,10 +40,10 @@ The policy also runs a scheduled backup daily at 04:00. The PolicyAssignment kee
 
 ### From the CLI
 
-Set a unique `metadata.name` in [`ibm-backup-restore/operations/backup.yaml`](../ibm-backup-restore/operations/backup.yaml) for each run, then:
+In the rendered copy, `build/ibm-backup-restore/operations/backup.yaml`, set a unique `metadata.name` for each run, then apply it. The namespaces and application are already filled in from `.env`. Running `./scripts/render.sh` again resets this file, so set the name after rendering.
 
 ```bash
-oc apply -f ibm-backup-restore/operations/backup.yaml
+oc apply -f build/ibm-backup-restore/operations/backup.yaml
 oc get backups.data-protection.isf.ibm.com -n "$FUSION_NS" -w
 ```
 
@@ -59,7 +59,7 @@ oc get backups.data-protection.isf.ibm.com -n "$FUSION_NS" --sort-by=.metadata.c
 Then confirm the backup released the database. `PAUSED` must be `<none>` on every row; `true` means maintenance mode is still set:
 
 ```bash
-oc get db2uinstances.db2u.databases.ibm.com,db2uengines.db2u.databases.ibm.com -n "$SRC_NS" \
+oc get db2uinstances.db2u.databases.ibm.com,db2uengines.db2u.databases.ibm.com -n "$SOURCE_NS" \
   -o custom-columns='KIND:.kind,NAME:.metadata.name,PAUSED:.metadata.annotations.db2u\.databases\.ibm\.com/maintenance-pause-reconcile'
 ```
 
@@ -67,7 +67,7 @@ oc get db2uinstances.db2u.databases.ibm.com,db2uengines.db2u.databases.ibm.com -
 
 Before every restore into a new target:
 
-- The target project exists (`db2u-instance/db2u-instance-dev-project.yaml`).
+- The target project exists (`build/db2u-instance/db2u-instance-dev-project.yaml`).
 - The target is in the Db2 OperatorGroup and `namespace-scope` ConfigMap ([end-to-end §2.1](end-to-end.md#21-let-the-operator-watch-the-source-and-every-restore-target)).
 - Nodes carry `my.cluster/environment=<ENV>` ([§2.2](end-to-end.md#22-label-worker-nodes)).
 - The helper is Running on the restoring cluster, and its permission checks pass ([§4](end-to-end.md#4-recipe-helper)).
@@ -76,7 +76,7 @@ Before every restore into a new target:
 
    ![Copy the backup name](screenshots/backup-completed-copy-name.png)
 
-2. Edit [`ibm-backup-restore/operations/restore.yaml`](../ibm-backup-restore/operations/restore.yaml):
+2. Edit the rendered copy, `build/ibm-backup-restore/operations/restore.yaml`. The namespaces come from `.env`; set the run's name and backup, and `ENV` if the target is not `dev`. In the example values:
 
    ```yaml
    metadata:
@@ -84,8 +84,8 @@ Before every restore into a new target:
    spec:
      backup: <backup name from step 1>
      namespaceMapping:
-       db2u-bnr-recipe-helper: db2u-bnr-recipe-helper    # required, see below
-       db2u-instance: db2u-instance-dev
+       recipe-helper: recipe-helper                      # HELPER_NS to itself; required, see below
+       db2u-instance: db2u-instance-dev                  # SOURCE_NS to TARGET_NS
      recipe:
        name: db2u-instance-helper-parent
        namespace: ibm-spectrum-fusion-ns
@@ -94,14 +94,14 @@ Before every restore into a new target:
        ENV: dev                                          # affinity value and environment label
    ```
 
-   The helper line is not optional. The parent's `helper-exec` hooks name that namespace, and Fusion's restore loader fails with `KeyError: 'db2u-bnr-recipe-helper'` if it is not mapped.
+   The helper line is not optional. The parent's `helper-exec` hooks name that namespace, and Fusion's restore loader fails with `KeyError: 'recipe-helper'` if it is not mapped.
 
 3. Apply and watch:
 
    ```bash
-   oc apply -f ibm-backup-restore/operations/restore.yaml
+   oc apply -f build/ibm-backup-restore/operations/restore.yaml
    oc get restores.data-protection.isf.ibm.com -n "$FUSION_NS" -w
-   oc get db2uinstances.db2u.databases.ibm.com,pods,pvc -n "$TGT_NS"
+   oc get db2uinstances.db2u.databases.ibm.com,pods,pvc -n "$TARGET_NS"
    ```
 
    The restore sets the target display name, restores volumes, resources and the `Db2uInstance`, waits for the engine to be Ready, runs `manage_snapshots --action restore` and `resume`, waits for the instance to be Ready, waits 300 s, then clears maintenance.
@@ -121,13 +121,13 @@ Before every restore into a new target:
    ![Restored PVCs](screenshots/restored-app-pvcs.png)
 
    ```bash
-   oc get project "$TGT_NS" -o jsonpath='{.metadata.annotations.openshift\.io/display-name}'; echo
-   oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$TGT_NS" -L backup -L my.cluster/environment
-   oc get pvc -n "$TGT_NS" -L backup -L my.cluster/environment
-   oc get db2uinstances.db2u.databases.ibm.com,db2uengines.db2u.databases.ibm.com -n "$TGT_NS" \
+   oc get project "$TARGET_NS" -o jsonpath='{.metadata.annotations.openshift\.io/display-name}'; echo
+   oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$TARGET_NS" -L backup -L my.cluster/environment
+   oc get pvc -n "$TARGET_NS" -L backup -L my.cluster/environment
+   oc get db2uinstances.db2u.databases.ibm.com,db2uengines.db2u.databases.ibm.com -n "$TARGET_NS" \
      -o custom-columns='KIND:.kind,NAME:.metadata.name,PAUSED:.metadata.annotations.db2u\.databases\.ibm\.com/maintenance-pause-reconcile'
-   oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$TGT_NS" -o jsonpath='{.status.state}'; echo
-   oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$SRC_NS" -o jsonpath='{.status.state}'; echo
+   oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$TARGET_NS" -o jsonpath='{.status.state}'; echo
+   oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$SOURCE_NS" -o jsonpath='{.status.state}'; echo
    ```
 
    In order, expect: `DB2U Instance (Restored)`; `restored` and `dev` (your `ENV`) on the instance; the same two labels on every PVC; `<none>` under `PAUSED`; `Ready` for the restored instance; and `Ready` for the source, which the restore must not touch.

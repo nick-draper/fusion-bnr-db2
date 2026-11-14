@@ -9,6 +9,7 @@
   "devDependencies": {
     "@ibm/plex-mono": "2.5.0",
     "@ibm/plex-sans": "1.1.0",
-    "@resvg/resvg-js": "2.6.2"
+    "@resvg/resvg-js": "2.6.2",
+    "js-yaml": "4.1.0"
   }
 }

@@ -1,5 +1,5 @@
 ---
-# Permissions for the db2u-bnr-recipe-helper service account. The parent
+# Permissions for the recipe-helper service account. The parent
 # recipe's helper-exec hooks run curl in the helper pod with this account's
 # token, in any Db2 namespace:
 #   - list Db2uInstances / Db2uEngines, then patch maintenance-pause-reconcile
@@ -14,7 +14,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: db2u-bnr-recipe-helper
+  name: recipe-helper
 
 rules:
   - apiGroups:

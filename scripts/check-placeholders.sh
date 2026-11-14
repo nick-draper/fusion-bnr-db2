@@ -1,11 +1,13 @@
 #!/bin/bash
-# Refuse to commit a filled-in license or object-storage key.
+# Refuse to commit a real license, object-storage key or rendered manifest.
 #
 # Why this exists:
-#   db2u-instance.yaml and secret.yaml are templates. You fill them in
-#   place before running oc apply, so a real license or access key
-#   is one `git add -A` away from the repository. This checks the staged
-#   (index) copy of each template still holds its <...> placeholders.
+#   The manifests are templates. Your values live in .env, and
+#   scripts/render.sh writes filled copies to build/. Both are git-ignored,
+#   but `git add -f`, or filling a template in place, would still put a
+#   license or key in the repository. This checks the staged (index) copies:
+#   the templates must still hold their placeholders, and nothing from .env or
+#   build/ may be staged.
 #
 # Runs as the pre-commit hook (.githooks/pre-commit). Enable it once per clone:
 #   git config core.hooksPath .githooks
@@ -22,9 +24,9 @@ cd "${root}"
 mode=${1:-index}
 
 # file|placeholder, one per line
-checks='db2u-instance/db2u-instance.yaml|<Insert License>
-ibm-backup-restore/backend-storage-location/secret.yaml|<access-key-id>
-ibm-backup-restore/backend-storage-location/secret.yaml|<secret-access-key>'
+checks='db2u-instance/db2u-instance.yaml|${DB2_LICENSE}
+ibm-backup-restore/backend-storage-location/secret.yaml|${S3_ACCESS_KEY_ID}
+ibm-backup-restore/backend-storage-location/secret.yaml|${S3_ACCESS_KEY}'
 
 failed=0
 while IFS='|' read -r file placeholder; do
@@ -42,10 +44,18 @@ while IFS='|' read -r file placeholder; do
   fi
 done <<<"${checks}"
 
+if [ "${mode}" != "--worktree" ]; then
+  staged=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(\.env$|build/)' || true)
+  if [ -n "${staged}" ]; then
+    echo "BLOCKED: these hold your own values and must not be committed:" >&2
+    echo "${staged}" | sed 's/^/  /' >&2
+    failed=1
+  fi
+fi
+
 if [ "${failed}" -ne 0 ]; then
   echo >&2
-  echo "These files are templates. Put the placeholders back before committing:" >&2
-  echo "  git restore --staged <file>     # unstage, keep your filled copy on disk" >&2
-  echo "Your filled copy stays usable for oc apply; just don't commit it." >&2
+  echo "Keep your values in .env and render them with ./scripts/render.sh." >&2
+  echo "To unstage a file and keep it on disk:  git restore --staged <file>" >&2
   exit 1
 fi

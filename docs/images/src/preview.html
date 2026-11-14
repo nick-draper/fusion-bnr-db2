@@ -156,7 +156,7 @@ textarea {
 <header class="wrap mast">
   <div class="kicker">fusion-bnr-db2 · docs/images</div>
   <h1>Db2u Diagram Styles</h1>
-  <p class="lede">The four README figures for the Db2uInstance recipe, redrawn as one system. Pick a palette, a drawing treatment and a type family, compare light and dark, then copy any figure as a self-contained SVG for <code style="font-family:var(--mono);font-size:13px">docs/images/</code>.</p>
+  <p class="lede">The five README figures for the Db2uInstance recipe, redrawn as one system. Pick a palette, a drawing treatment and a type family, compare light and dark, then copy any figure as a self-contained SVG for <code style="font-family:var(--mono);font-size:13px">docs/images/</code>.</p>
 </header>
 
 <nav class="rail" aria-label="Diagram style controls">
@@ -185,10 +185,18 @@ textarea {
 
 <script>
 <script src="figures.js"></script>
+<script src="text.js"></script>
 <script>
 (function () {
   "use strict";
-  const { TYPE, ROLES, BASE, PALETTES, TREATS, TREAT_NOTES, FIGS, buildSVG, esc, LOCKED } = window.Db2uFigures;
+  const { TYPE, ROLES, BASE, PALETTES, TREATS, TREAT_NOTES, FIGS, buildSVG, esc, setText, setMeasure } = window.Db2uFigures;
+  // Wording from text.yaml, via the text.js that `npm run export` writes.
+  setText(window.Db2uText);
+  const ctx2d = document.createElement("canvas").getContext("2d");
+  setMeasure(function (s, f) {
+    ctx2d.font = f.weight + " " + f.size + "px " + (f.mono ? "'IBM Plex Mono', monospace" : "'IBM Plex Sans', sans-serif");
+    return ctx2d.measureText(s).width;
+  });
 
   /* ---------- State and controls ---------- */
 

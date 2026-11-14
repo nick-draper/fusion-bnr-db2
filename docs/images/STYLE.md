@@ -14,15 +14,28 @@ Each figure ships in four forms. The README and `docs/end-to-end.md` show them w
 
 Figures, numbered in README order: `deploy` (Fig 1), `layouts` (Fig 2), `architecture` (Fig 3), `transform` (Fig 4), `failover` (Fig 5). The number comes from the figure's position in `FIGS`, so a new figure goes where the README shows it.
 
+## Change the wording
+
+All the text in the figures lives in [`src/text.yaml`](src/text.yaml), grouped by figure: titles, box labels, lines, arrow labels, table rows and bullets. Layout and colour stay in `figures.js`, so a wording change never touches code.
+
+Two ways to change it:
+
+- **In the file.** Edit `src/text.yaml`, then run `npm run export` (below). The comments at the top of the file explain what can change: wording freely, and the length of some lists.
+- **In the Db2u Diagram Styles artifact.** Turn on **Edit text**, click any label and type. The figure redraws as you type and says whether the text still fits. **Save** keeps the edit in the artifact; ask Claude to apply the saved edits, which copies them into `text.yaml` and re-exports.
+
+Boxes don't grow to fit the text. `npm run export` measures every label with IBM Plex's real character widths and stops, writing nothing, if any text is missing or too long for its box. It names the key, the text and how much room there is, so you can shorten it or ask for the box to be widened.
+
 ## Change or regenerate a figure
 
 Do not edit the SVGs by hand. They are built from [`src/`](src/):
 
 | File | Role |
 | --- | --- |
-| [`src/figures.js`](src/figures.js) | The figures (`FIGS`), palettes, treatments and drawing code. Edit here |
+| [`src/text.yaml`](src/text.yaml) | Every word in the figures. Edit wording here |
+| [`src/figures.js`](src/figures.js) | Layout, palettes, treatments and drawing code (`FIGS`). Edit here to move or resize boxes |
 | [`src/preview.html`](src/preview.html) | Open in a browser to see every figure in light and dark, and to compare palettes and treatments |
-| [`src/export.js`](src/export.js) | Writes all 25 files in this folder in the locked style |
+| [`src/export.js`](src/export.js) | Checks the text fits, then writes all 25 files in this folder in the locked style |
+| `src/text.js` | Written by the export from `text.yaml` so `preview.html` can show it. Don't edit |
 
 Needs Node 18 or newer. From `docs/images/src`:
 
