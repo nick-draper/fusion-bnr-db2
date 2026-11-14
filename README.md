@@ -33,7 +33,14 @@ The worked example backs up **`db2u-instance`** and restores it into **`db2u-ins
 | 4. Recipe helper | [end-to-end §4](docs/end-to-end.md#4-recipe-helper) | [`recipe-helper/`](recipe-helper/) |
 | 5. Back up and restore | [operations.md](docs/operations.md) | [`ibm-backup-restore/operations/`](ibm-backup-restore/operations/) |
 
-There is no install script. Follow [docs/end-to-end.md](docs/end-to-end.md) from the top: it sets the namespace names once, then gives the `oc` commands for each step and a check to run before you move on. Fill the placeholders listed under [What you edit](#what-you-edit) as you reach each file.
+Put your values in `.env` and render the manifests:
+
+```bash
+cp .env.example .env        # then fill it in
+./scripts/render.sh         # writes filled manifests to build/
+```
+
+There is no install script. `render.sh` only writes files; it never contacts the cluster. Then follow [docs/end-to-end.md](docs/end-to-end.md) from the top: it applies the files in `build/` with `oc`, one step at a time, with a check before you move on.
 
 Before the first backup, every line of [Ready to back up?](docs/end-to-end.md#ready-to-back-up) must pass. Backups, restores and their checks are in [operations.md](docs/operations.md).
 
@@ -43,46 +50,54 @@ Before the first backup, every line of [Ready to back up?](docs/end-to-end.md#re
 README.md                         why, how it runs, quick start
 .githooks/                        pre-commit hook that blocks a filled license or key
 docs/                             runbook, object storage, operations, diagrams, screenshots
-db2u-instance/                    projects, Db2uInstance, operator scope         (edit)
+.env.example                      your values: namespaces, license, storage class, object storage
+db2u-instance/                    projects, Db2uInstance, operator scope         (template)
 ibm-backup-restore/
-├── backend-storage-location/     credentials secret, storage location, policy  (edit)
+├── backend-storage-location/     credentials secret, storage location, policy  (template)
 ├── recipe/                       parent and child recipes                       (apply as is)
 ├── transform/                    restore transform                              (check JSON paths)
 ├── policy-assignment/            application + policy + parent recipe           (apply as is)
-├── operations/                   Backup and Restore CRs                         (edit per run)
+├── operations/                   Backup and Restore CRs                         (template; name per run)
 └── config/                       Velero plugin note, not a manifest
 recipe-helper/                    project, service account, RBAC, deployment     (set image)
-scripts/                          placeholder check (pre-commit), namespace discovery
+scripts/                          render (.env to build/), placeholder check (pre-commit), discovery
+build/                            rendered manifests you apply (git-ignored)
 ```
 
 ### What you edit
 
-| File | Replace |
-| --- | --- |
-| [`db2u-instance/db2u-instance.yaml`](db2u-instance/db2u-instance.yaml) | `<Insert License>`; `storageClassName` if your cluster has no `isf-block-file-delete-sc` |
-| [`ibm-backup-restore/backend-storage-location/secret.yaml`](ibm-backup-restore/backend-storage-location/secret.yaml) | `<access-key-id>`, `<secret-access-key>` |
-| [`ibm-backup-restore/backend-storage-location/backup-storage-location.yaml`](ibm-backup-restore/backend-storage-location/backup-storage-location.yaml) | `bucket`, `endpoint`, `region` |
-| [`recipe-helper/deployment.yaml`](recipe-helper/deployment.yaml) | `image` (your mirrored UBI 9 minimal) |
-| [`ibm-backup-restore/operations/backup.yaml`](ibm-backup-restore/operations/backup.yaml) | `metadata.name`, unique per run |
-| [`ibm-backup-restore/operations/restore.yaml`](ibm-backup-restore/operations/restore.yaml) | `metadata.name`, `spec.backup`, `namespaceMapping`, `transformMapping.ENV` |
+Your values live in `.env`; the YAML files are templates with `${NAME}` placeholders, and [`scripts/render.sh`](scripts/render.sh) writes filled copies to `build/`.
 
-Do not commit files that hold a real license or real keys. A pre-commit hook blocks it once you enable it in your clone:
+| `.env` key | Fills | Example |
+| --- | --- | --- |
+| `FUSION_NS` | Namespace of the storage location, policy, recipes, transform, assignment, backups and restores | `ibm-spectrum-fusion-ns` |
+| `OP_NS` | Db2u operator namespace: OperatorGroup and `namespace-scope` ConfigMap | `db2-operator` |
+| `SOURCE_NS` | Instance namespace and Fusion Application; `namespaceMapping` source | `db2u-instance` |
+| `TARGET_NS` | Restore target project; `namespaceMapping` target | `db2u-instance-dev` |
+| `HELPER_NS` | Recipe helper namespace, the parent recipe's hook namespace, and its `namespaceMapping` entry | `recipe-helper` |
+| `DB2_LICENSE` | License in `db2u-instance.yaml` | |
+| `STORAGE_CLASS` | `storageClassName` of all three instance volumes | `isf-block-file-delete-sc` |
+| `S3_BUCKET_NAME`, `S3_ENDPOINT`, `S3_REGION` | Backup storage location | `db2u-instance-bucket` |
+| `S3_ACCESS_KEY_ID`, `S3_ACCESS_KEY` | Access key pair in `secret.yaml`; `S3_ACCESS_KEY` is the secret key | |
+
+Two values are not in `.env`:
+
+| File | Set |
+| --- | --- |
+| [`recipe-helper/deployment.yaml`](recipe-helper/deployment.yaml) | `image` (your mirrored UBI 9 minimal), in the template |
+| `build/ibm-backup-restore/operations/backup.yaml`, `restore.yaml` | `metadata.name` per run; `spec.backup` and `transformMapping.ENV` on the Restore, in the rendered copy |
+
+`${GROUP...}` in the recipes and `${ENV}` in the Transform are Fusion's own variables. `render.sh` leaves them alone.
+
+`.env` and `build/` are git-ignored. A pre-commit hook also blocks a commit that stages them or that fills a template's license or key in place, once you enable it in your clone:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-It runs [`scripts/check-placeholders.sh`](scripts/check-placeholders.sh), which refuses the commit if the staged `db2u-instance.yaml` or `secret.yaml` has lost its `<...>` placeholders. Your filled copies stay on disk for `oc apply`; unstage them with `git restore --staged <file>`.
+It runs [`scripts/check-placeholders.sh`](scripts/check-placeholders.sh).
 
-If your namespaces or instance name differ from the example, change them everywhere they appear:
-
-- the projects and `db2u-instance.yaml` in `db2u-instance/`
-- the OperatorGroup targets and the `namespace-scope` ConfigMap
-- `application` in the policy assignment and in `backup.yaml`
-- `namespaceMapping` in `restore.yaml`
-- `resourceNameRegex` (the instance name) in the Transform
-
-Then set the same names in the shell variables at the start of [end-to-end §0](docs/end-to-end.md#0-before-you-start), and use your environment label in place of `dev`.
+The instance name, `dwdb`, is not a variable. If yours differs, change `metadata.name` in `db2u-instance.yaml` and `resourceNameRegex` in the Transform, and set `INSTANCE` in your shell (end-to-end §0). Use your environment label in place of `dev`.
 
 ## Why this recipe exists
 
@@ -116,7 +131,7 @@ The sample also limits restore to the **same** namespace. Promoting prod to dev 
 
 | Gap in the sample | What this recipe does |
 | --- | --- |
-| Operator hooks run in the instance namespace | Exec hooks in the `db2u-bnr-recipe-helper` pod patch the `Db2uInstance` and `Db2uEngine` through the API. No hook runs in `db2-operator` |
+| Operator hooks run in the instance namespace | Exec hooks in the `recipe-helper` pod patch the `Db2uInstance` and `Db2uEngine` through the API. No hook runs in `db2-operator` |
 | Operator, subscriptions, and the database are one backup | The Application is the instance namespace only (Fusion discovers it as `db2u-instance`) |
 | Exclude-list, then copy everything else | Allow-list: volumes, configmaps, secrets, `Db2uInstance` |
 | No undo if a backup step fails after quiesce starts | `inverseOp` on suspend and both maintenance-on steps; a later failure undoes each completed step, newest first |
@@ -134,7 +149,7 @@ dp.isf.ibm.com/parent-recipe: db2u-instance-helper-parent
 dp.isf.ibm.com/parent-recipe-namespace: ibm-spectrum-fusion-ns
 ```
 
-Maintenance mode is an annotation (`db2u.databases.ibm.com/maintenance-pause-reconcile`) on the `Db2uInstance` and `Db2uEngine`. The parent sets and clears it from a small **recipe helper** pod in its own namespace, `db2u-bnr-recipe-helper`. The helper calls the Kubernetes API with its own service account. The operator reacts to the annotation wherever it runs, and no hook runs in `db2-operator`.
+Maintenance mode is an annotation (`db2u.databases.ibm.com/maintenance-pause-reconcile`) on the `Db2uInstance` and `Db2uEngine`. The parent sets and clears it from a small **recipe helper** pod in its own namespace, `recipe-helper`. The helper calls the Kubernetes API with its own service account. The operator reacts to the annotation wherever it runs, and no hook runs in `db2-operator`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
@@ -181,11 +196,11 @@ The helper is the compromise. It is a minimal UBI pod with `curl`, its own servi
 
 ```yaml
 namespaceMapping:
-  db2u-bnr-recipe-helper: db2u-bnr-recipe-helper
+  recipe-helper: recipe-helper
   db2u-instance: db2u-instance-dev
 ```
 
-Leave that line out and the restore fails with `KeyError: 'db2u-bnr-recipe-helper'`. [`ibm-backup-restore/operations/restore.yaml`](ibm-backup-restore/operations/restore.yaml) carries it.
+Leave that line out and the restore fails with `KeyError: 'recipe-helper'`. [`ibm-backup-restore/operations/restore.yaml`](ibm-backup-restore/operations/restore.yaml) carries it.
 
 [End-to-end §4](docs/end-to-end.md#4-recipe-helper) deploys the helper and its ClusterRole and checks the permissions with `oc auth can-i`. Do it on every cluster that backs up **and** every cluster that restores. Without it the helper hooks fail with Forbidden.
 

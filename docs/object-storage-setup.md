@@ -63,14 +63,17 @@ Record the access key and secret key. The secret key is shown once.
 
 ## Where the values go
 
-| Value | File | Field |
+Put them in `.env` (copied from [`.env.example`](../.env.example)); `./scripts/render.sh` writes them into the manifests.
+
+| Value | `.env` key | Ends up in |
 | --- | --- | --- |
-| Bucket | [`backup-storage-location.yaml`](../ibm-backup-restore/backend-storage-location/backup-storage-location.yaml) | `spec.params.bucket` |
-| Endpoint URL | same | `spec.params.endpoint` |
-| Endpoint CA certificate | secret `minio-registry-cert-secret` in `ibm-spectrum-fusion-ns` | `spec.privateCertificateName` |
-| Access key | [`secret.yaml`](../ibm-backup-restore/backend-storage-location/secret.yaml) | `stringData.access-key-id` |
-| Secret key | same | `stringData.secret-access-key` |
+| Bucket | `S3_BUCKET_NAME` | [`backup-storage-location.yaml`](../ibm-backup-restore/backend-storage-location/backup-storage-location.yaml) `spec.params.bucket` |
+| Endpoint URL | `S3_ENDPOINT` | same, `spec.params.endpoint` |
+| Region | `S3_REGION` | same, `spec.params.region` |
+| Access key | `S3_ACCESS_KEY_ID` | [`secret.yaml`](../ibm-backup-restore/backend-storage-location/secret.yaml) `stringData.access-key-id` |
+| Secret key | `S3_ACCESS_KEY` | same, `stringData.secret-access-key` |
+| Endpoint CA certificate | not in `.env` | secret `minio-registry-cert-secret` in `FUSION_NS`, named by `spec.privateCertificateName` ([end-to-end §3.2](end-to-end.md#32-backup-storage-location)) |
 
-`region` (`us-west-2`) is required by the S3 client; MinIO ignores it. Use your provider's region otherwise.
+`S3_REGION` is required by the S3 client; MinIO ignores it (`us-west-2` in the example). Use your provider's region otherwise.
 
-Never commit `secret.yaml` with real keys.
+`.env` and the rendered `build/` hold the keys. Both are git-ignored; never commit them.

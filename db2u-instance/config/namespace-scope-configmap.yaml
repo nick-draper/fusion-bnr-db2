@@ -3,7 +3,7 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: namespace-scope
-  namespace: db2-operator
+  namespace: ${OP_NS}
 data:
-  namespaces: 'db2-operator,db2u-instance,db2u-instance-dev'
+  namespaces: '${OP_NS},${SOURCE_NS},${TARGET_NS}'
 ...

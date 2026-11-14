@@ -2,22 +2,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: db2u-bnr-recipe-helper
-  namespace: db2u-bnr-recipe-helper
+  name: recipe-helper
+  namespace: ${HELPER_NS}
   labels:
-    app: db2u-bnr-recipe-helper
+    app: recipe-helper
 
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: db2u-bnr-recipe-helper
+      app: recipe-helper
   template:
     metadata:
       labels:
-        app: db2u-bnr-recipe-helper
+        app: recipe-helper
     spec:
-      serviceAccountName: db2u-bnr-recipe-helper
+      serviceAccountName: recipe-helper
       securityContext:
         runAsNonRoot: true
         seccompProfile:

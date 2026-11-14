@@ -7,7 +7,7 @@ Deploy the recipes on the `db2u-instance` example, then restore it into `db2u-in
 | `db2u-instance` | Source: live `Db2uInstance` `dwdb` (Fusion Application `db2u-instance`) |
 | `db2u-instance-dev` | Target: empty project you restore into |
 | `db2-operator` | Db2u operator only. Not backed up; no recipe hook runs here |
-| `db2u-bnr-recipe-helper` | Recipe helper pod that pauses and unpauses the instance |
+| `recipe-helper` | Recipe helper pod that pauses and unpauses the instance |
 | `ibm-spectrum-fusion-ns` | Storage location, policy, recipes, transform, backups, restores |
 | `ibm-backup-restore` | Fusion DataProtectionApplication (Velero plugin) |
 
@@ -17,7 +17,7 @@ PolicyAssignment  db2u-instance-recipe-policy-assignment
   BackupPolicy    db2u-instance-backup-policy → db2u-instance-backup-storage-location
   Recipe          db2u-instance-helper-parent
                     +-- discovers db2u-instance-helper-child (labels)
-                    +-- helper-exec hooks run in db2u-bnr-recipe-helper
+                    +-- helper-exec hooks run in recipe-helper
 ```
 
 <picture>
@@ -31,16 +31,21 @@ PolicyAssignment  db2u-instance-recipe-policy-assignment
 
 You need Fusion Backup & Restore 2.10 or newer (tested on 2.12.2), the Db2u operator installed in `db2-operator`, Db2 12.1.4 or newer, S3-compatible object storage, and `oc` logged in as cluster-admin.
 
-Run every command from the repository root, in one shell, after setting these names. Change them if your cluster differs from the example; [README: What you edit](../README.md#what-you-edit) lists the files that hold the same names.
+Your values go in one file, `.env`. The manifests in the repository are templates with `${NAME}` placeholders, and [`scripts/render.sh`](../scripts/render.sh) fills them from `.env` into `build/`. Every `oc apply` below uses the copy in `build/`. The script only writes files; it never contacts the cluster.
 
 ```bash
-FUSION_NS=ibm-spectrum-fusion-ns
-OP_NS=db2-operator
-SRC_NS=db2u-instance
-TGT_NS=db2u-instance-dev
-HELPER_NS=db2u-bnr-recipe-helper
+cp .env.example .env
+```
+
+Fill in `.env`: the namespaces, `DB2_LICENSE`, `STORAGE_CLASS`, and the object storage bucket, endpoint, region and key pair from step 1. Each value is described in [`.env.example`](../.env.example). Then render, and load the namespace and storage class names into your shell:
+
+```bash
+./scripts/render.sh
+source build/env.sh
 INSTANCE=dwdb
 ```
+
+The script stops and names the problem if a value is missing or not a valid name. Run all later commands from the repository root, in the same shell. If you change `.env`, render again: the script rebuilds `build/` from scratch. `.env` and `build/` hold your license and keys; both are git-ignored.
 
 The commands use full resource names, such as `backups.data-protection.isf.ibm.com`, because a Fusion cluster also has Velero's `backups` and `restores`, and may have other `recipes` and `applications`. A short name can return the wrong kind.
 
@@ -86,18 +91,18 @@ If the output is empty, the operator watches all namespaces and you can skip the
 
 ```bash
 oc patch operatorgroup "$OG" -n "$OP_NS" --type=json \
-  -p '[{"op":"add","path":"/spec/targetNamespaces/-","value":"'"$SRC_NS"'"}]'
+  -p '[{"op":"add","path":"/spec/targetNamespaces/-","value":"'"$SOURCE_NS"'"}]'
 ```
 
 ```bash
 oc patch operatorgroup "$OG" -n "$OP_NS" --type=json \
-  -p '[{"op":"add","path":"/spec/targetNamespaces/-","value":"'"$TGT_NS"'"}]'
+  -p '[{"op":"add","path":"/spec/targetNamespaces/-","value":"'"$TARGET_NS"'"}]'
 ```
 
-Then set the same list in [`config/namespace-scope-configmap.yaml`](../db2u-instance/config/namespace-scope-configmap.yaml) (`data.namespaces`, comma-separated, no spaces) and apply it:
+Then apply the `namespace-scope` ConfigMap. The rendered copy of [`config/namespace-scope-configmap.yaml`](../db2u-instance/config/namespace-scope-configmap.yaml) lists `OP_NS`, `SOURCE_NS` and `TARGET_NS`; if the operator watches other instances too, add them to `data.namespaces` in `build/` first (comma-separated, no spaces):
 
 ```bash
-oc apply -f db2u-instance/config/namespace-scope-configmap.yaml
+oc apply -f build/db2u-instance/config/namespace-scope-configmap.yaml
 ```
 
 **Check**
@@ -107,7 +112,7 @@ oc get operatorgroup "$OG" -n "$OP_NS" -o jsonpath='{.spec.targetNamespaces}'; e
 oc get configmap namespace-scope -n "$OP_NS" -o jsonpath='{.data.namespaces}'; echo
 ```
 
-Both lists include `db2u-instance` and `db2u-instance-dev`. Repeat this step for every new restore target.
+Both lists include your `SOURCE_NS` and `TARGET_NS`. Repeat this step for every new restore target.
 
 ### 2.2 Label worker nodes
 
@@ -129,8 +134,8 @@ At least one node shows `prod` and one shows `dev`, with no `afm` role.
 ### 2.3 Projects
 
 ```bash
-oc apply -f db2u-instance/db2u-instance-project.yaml
-oc apply -f db2u-instance/db2u-instance-dev-project.yaml
+oc apply -f build/db2u-instance/db2u-instance-project.yaml
+oc apply -f build/db2u-instance/db2u-instance-dev-project.yaml
 ```
 
 Create the target project before any restore. Its display name is overwritten with `DB2U Instance (Restored)` when you restore into it.
@@ -138,41 +143,40 @@ Create the target project before any restore. Its display name is overwritten wi
 **Check**
 
 ```bash
-oc get project "$SRC_NS" "$TGT_NS"
+oc get project "$SOURCE_NS" "$TARGET_NS"
 ```
 
 ### 2.4 Db2uInstance
 
-In [`db2u-instance.yaml`](../db2u-instance/db2u-instance.yaml), replace `<Insert License>`. Change `storageClassName` if your cluster has no `isf-block-file-delete-sc`. Do not commit the filled file; the pre-commit hook blocks it ([README: What you edit](../README.md#what-you-edit)).
+[`db2u-instance.yaml`](../db2u-instance/db2u-instance.yaml) takes the license from `DB2_LICENSE` and the storage class for all three volumes from `STORAGE_CLASS`. Check the class exists:
 
 ```bash
-grep -n '<Insert License>' db2u-instance/db2u-instance.yaml || echo "license filled"
-oc get storageclass isf-block-file-delete-sc
+oc get storageclass "$STORAGE_CLASS"
 ```
 
-Expect `license filled` and the storage class (or your own, if you changed it). Then apply:
+Then apply:
 
 ```bash
-oc apply -f db2u-instance/db2u-instance.yaml
+oc apply -f build/db2u-instance/db2u-instance.yaml
 ```
 
 Wait until the state is `Ready`. A new instance can take 15 minutes or more:
 
 ```bash
-oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$SRC_NS" -o jsonpath='{.status.state}'; echo
+oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$SOURCE_NS" -o jsonpath='{.status.state}'; echo
 ```
 
 The recipe's readiness check selects instances labelled `for-backup=true`. The example manifest sets it. For an instance created without it, add it now:
 
 ```bash
-oc label db2uinstances.db2u.databases.ibm.com --all -n "$SRC_NS" for-backup=true --overwrite
+oc label db2uinstances.db2u.databases.ibm.com --all -n "$SOURCE_NS" for-backup=true --overwrite
 ```
 
 **Check**
 
 ```bash
-oc get db2uinstances.db2u.databases.ibm.com -n "$SRC_NS" -L for-backup
-oc get pods -n "$SRC_NS" -l name=dashmpp-head-0
+oc get db2uinstances.db2u.databases.ibm.com -n "$SOURCE_NS" -L for-backup
+oc get pods -n "$SOURCE_NS" -l name=dashmpp-head-0
 ```
 
 The instance shows `true` under `FOR-BACKUP`, and `dashmpp-head-0` is `Running`.
@@ -213,14 +217,11 @@ The output names `db2u-velero-plugin`.
 
    If the endpoint has a publicly trusted certificate, skip this and delete the `privateCertificateName` line from `backup-storage-location.yaml`.
 
-2. **Access key.** Put the key pair in [`secret.yaml`](../ibm-backup-restore/backend-storage-location/secret.yaml), replacing `<access-key-id>` and `<secret-access-key>`. Do not commit the filled file.
-
-3. **Bucket and endpoint.** Set `bucket` and `endpoint` in [`backup-storage-location.yaml`](../ibm-backup-restore/backend-storage-location/backup-storage-location.yaml). `region` is required by the S3 client; MinIO ignores the value.
+2. **Access key, bucket and endpoint.** These come from `.env`: `S3_ACCESS_KEY_ID` and `S3_ACCESS_KEY` fill [`secret.yaml`](../ibm-backup-restore/backend-storage-location/secret.yaml); `S3_BUCKET_NAME`, `S3_ENDPOINT` and `S3_REGION` fill [`backup-storage-location.yaml`](../ibm-backup-restore/backend-storage-location/backup-storage-location.yaml). `region` is required by the S3 client; MinIO ignores the value.
 
 ```bash
-grep -n -e '<access-key-id>' -e '<secret-access-key>' ibm-backup-restore/backend-storage-location/secret.yaml || echo "keys filled"
-oc apply -f ibm-backup-restore/backend-storage-location/secret.yaml
-oc apply -f ibm-backup-restore/backend-storage-location/backup-storage-location.yaml
+oc apply -f build/ibm-backup-restore/backend-storage-location/secret.yaml
+oc apply -f build/ibm-backup-restore/backend-storage-location/backup-storage-location.yaml
 ```
 
 **Check**
@@ -239,7 +240,7 @@ The phase is `Connected` (some releases report `Available`), and the UI shows th
 [`backup-policy.yaml`](../ibm-backup-restore/backend-storage-location/backup-policy.yaml): daily at 04:00 Australia/Sydney, 5 days retention. `provider` must stay `isf-backup-restore`.
 
 ```bash
-oc apply -f ibm-backup-restore/backend-storage-location/backup-policy.yaml
+oc apply -f build/ibm-backup-restore/backend-storage-location/backup-policy.yaml
 ```
 
 **Check**
@@ -255,9 +256,9 @@ Files: [`ibm-backup-restore/recipe/`](../ibm-backup-restore/recipe/), [`ibm-back
 Before applying the [Transform](../ibm-backup-restore/transform/transform.yaml), check that its JSON paths and `resourceNameRegex` (the instance name) match your `Db2uInstance`. It rewrites the affinity value and `my.cluster/environment` label to `${ENV}` from the Restore's `transformMapping`, sets the same label on every restored PVC, and adds `backup=restored` to both.
 
 ```bash
-oc apply -f ibm-backup-restore/recipe/parent-recipe.yaml
-oc apply -f ibm-backup-restore/recipe/child-recipe.yaml
-oc apply -f ibm-backup-restore/transform/transform.yaml
+oc apply -f build/ibm-backup-restore/recipe/parent-recipe.yaml
+oc apply -f build/ibm-backup-restore/recipe/child-recipe.yaml
+oc apply -f build/ibm-backup-restore/transform/transform.yaml
 ```
 
 **Check**
@@ -277,7 +278,7 @@ Both recipes and the transform are listed, and the child's label prints `db2u-in
 [`policy-assignment.yaml`](../ibm-backup-restore/policy-assignment/policy-assignment.yaml) ties Application `db2u-instance`, the policy and the parent recipe together. Apply it **before the first backup**: a backup taken without the recipe has no quiesce, and a restore cannot add one later. `runNow: false` keeps it from starting a backup.
 
 ```bash
-oc apply -f ibm-backup-restore/policy-assignment/policy-assignment.yaml
+oc apply -f build/ibm-backup-restore/policy-assignment/policy-assignment.yaml
 ```
 
 **Check**
@@ -308,19 +309,19 @@ grep -n 'image:' recipe-helper/deployment.yaml
 Apply the five manifests in this order:
 
 ```bash
-oc apply -f recipe-helper/project.yaml
-oc apply -f recipe-helper/service-account.yaml
-oc apply -f recipe-helper/cluster-role.yaml
-oc apply -f recipe-helper/cluster-role-binding.yaml
-oc apply -f recipe-helper/deployment.yaml
-oc rollout status deployment/db2u-bnr-recipe-helper -n "$HELPER_NS" --timeout=180s
+oc apply -f build/recipe-helper/project.yaml
+oc apply -f build/recipe-helper/service-account.yaml
+oc apply -f build/recipe-helper/cluster-role.yaml
+oc apply -f build/recipe-helper/cluster-role-binding.yaml
+oc apply -f build/recipe-helper/deployment.yaml
+oc rollout status deployment/recipe-helper -n "$HELPER_NS" --timeout=180s
 ```
 
 **Check**
 
 ```bash
-oc get pods -n "$HELPER_NS" -l app=db2u-bnr-recipe-helper
-SA=system:serviceaccount:$HELPER_NS:db2u-bnr-recipe-helper
+oc get pods -n "$HELPER_NS" -l app=recipe-helper
+SA=system:serviceaccount:$HELPER_NS:recipe-helper
 oc auth can-i list  db2uinstances.db2u.databases.ibm.com --all-namespaces --as="$SA"
 oc auth can-i patch db2uinstances.db2u.databases.ibm.com --all-namespaces --as="$SA"
 oc auth can-i list  db2uengines.db2u.databases.ibm.com   --all-namespaces --as="$SA"
@@ -330,7 +331,7 @@ oc auth can-i patch namespaces --as="$SA"
 
 The pod is `Running` and every `can-i` prints `yes`.
 
-The helper namespace is fixed in the recipe, so every Restore must map it to itself (`db2u-bnr-recipe-helper: db2u-bnr-recipe-helper`). See [README: Why a helper pod](../README.md#why-a-helper-pod).
+The helper namespace is fixed in the recipe, so every Restore must map it to itself (`recipe-helper: recipe-helper`). See [README: Why a helper pod](../README.md#why-a-helper-pod).
 
 ---
 
@@ -342,8 +343,8 @@ Run these once more before the first backup. Each line should give the result on
 | --- | --- | --- |
 | Operator running | `oc get pods -n "$OP_NS" -l control-plane=db2u-operator-manager` | `Running` |
 | Operator watches source and target | `oc get operatorgroup "$OG" -n "$OP_NS" -o jsonpath='{.spec.targetNamespaces}'` | both namespaces, or empty for all |
-| Instance ready | `oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$SRC_NS" -o jsonpath='{.status.state}'` | `Ready` |
-| Instance labelled | `oc get db2uinstances.db2u.databases.ibm.com -n "$SRC_NS" -L for-backup` | `true` |
+| Instance ready | `oc get db2uinstances.db2u.databases.ibm.com "$INSTANCE" -n "$SOURCE_NS" -o jsonpath='{.status.state}'` | `Ready` |
+| Instance labelled | `oc get db2uinstances.db2u.databases.ibm.com -n "$SOURCE_NS" -L for-backup` | `true` |
 | Storage connected | `oc get backupstoragelocations.data-protection.isf.ibm.com -n "$FUSION_NS"` | `Connected` in the UI |
 | Assignment names the parent | step 3.5 check | `db2u-instance-helper-parent runNow=false` |
 | Helper running and allowed | step 4 check | `Running`, every `can-i` is `yes` |
@@ -372,10 +373,10 @@ Backups, restores, the checks after each, and the UI walkthrough: [operations.md
 
 | Symptom | Check |
 | --- | --- |
-| `KeyError: 'db2u-bnr-recipe-helper'` on restore | The Restore's `namespaceMapping` lacks `db2u-bnr-recipe-helper: db2u-bnr-recipe-helper` |
+| `KeyError: 'recipe-helper'` on restore | The Restore's `namespaceMapping` lacks `recipe-helper: recipe-helper` |
 | `KeyError: 'db2-operator'` on restore | An old recipe still has a hook in `db2-operator`. Apply the current recipes (§3.4) |
 | Helper hook `Forbidden` | Run the §4 check on that cluster; check the ClusterRoleBinding subject namespace |
-| Helper hook finds no pod | Helper deployment not `Running`, or label `app=db2u-bnr-recipe-helper` changed |
+| Helper hook finds no pod | Helper deployment not `Running`, or label `app=recipe-helper` changed |
 | Restored instance never reconciles | Target missing from the OperatorGroup or `namespace-scope` ConfigMap (§2.1) |
 | Restored pods `Pending` | No node labelled `my.cluster/environment=<ENV>` (§2.2) |
 | Readiness check never matches | `for-backup=true` on the instance (§2.4); engine labels in `db2uengine-check` |
@@ -387,11 +388,11 @@ Backups, restores, the checks after each, and the UI walkthrough: [operations.md
 
 ## File map
 
-Paths are relative to the repository root.
+Paths are relative to the repository root. The YAML files are templates; apply their rendered copies from `build/`.
 
 | Path | Role |
 | --- | --- |
-| `db2u-instance/` | OperatorGroup and namespace-scope targets, projects, `Db2uInstance` |
+| `db2u-instance/` | Templates: OperatorGroup and namespace-scope targets, projects, `Db2uInstance` |
 | `ibm-backup-restore/backend-storage-location/` | Credentials secret, storage location, backup policy |
 | `ibm-backup-restore/recipe/parent-recipe.yaml` | Parent recipe: maintenance mode, restore ordering, display name |
 | `ibm-backup-restore/recipe/child-recipe.yaml` | Child recipe: the `Db2uInstance`, its volumes and snapshot hooks |
@@ -401,7 +402,10 @@ Paths are relative to the repository root.
 | `ibm-backup-restore/operations/backup.yaml` | Backup CR |
 | `ibm-backup-restore/operations/restore.yaml` | Restore CR: `db2u-instance` → `db2u-instance-dev` |
 | `recipe-helper/` | Helper project, service account, RBAC, deployment |
+| `.env.example` | The values to copy into `.env`: namespaces, license, storage class, object storage |
+| `scripts/render.sh` | Fills the templates from `.env` into `build/`, and writes `build/env.sh`. Never contacts the cluster |
+| `build/` | Rendered manifests and `env.sh`; what you apply. Git-ignored |
 | `.githooks/pre-commit` | Runs `scripts/check-placeholders.sh` on commit (`git config core.hooksPath .githooks`) |
-| `scripts/check-placeholders.sh` | Refuses a commit whose `db2u-instance.yaml` or `secret.yaml` has lost its placeholders |
+| `scripts/check-placeholders.sh` | Refuses a commit that stages `.env` or `build/`, or fills a template's license or key in place |
 | `scripts/discover-instance-resources.sh` | Read-only inventory of a namespace before you widen the allow-list |
 | `docs/images/` | Figures; see [`docs/images/STYLE.md`](images/STYLE.md) to change them |

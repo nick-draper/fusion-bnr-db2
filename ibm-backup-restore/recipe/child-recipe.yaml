@@ -20,10 +20,10 @@ apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
 metadata:
   name: db2u-instance-helper-child
-  namespace: ibm-spectrum-fusion-ns
+  namespace: ${FUSION_NS}
   labels:
     dp.isf.ibm.com/parent-recipe: db2u-instance-helper-parent
-    dp.isf.ibm.com/parent-recipe-namespace: ibm-spectrum-fusion-ns
+    dp.isf.ibm.com/parent-recipe-namespace: ${FUSION_NS}
 
 spec:
   appType: db2uinstance

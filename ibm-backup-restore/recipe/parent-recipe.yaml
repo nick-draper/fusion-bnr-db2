@@ -3,7 +3,7 @@
 # Owns maintenance mode, restore ordering, and the target Project display
 # name. Instance volumes, CRs, and manage_snapshots hooks live in the child.
 #
-# Maintenance mode is set by exec hooks in the db2u-bnr-recipe-helper pod.
+# Maintenance mode is set by exec hooks in the recipe-helper pod.
 # Each hook calls the Kubernetes API with curl and the helper's service
 # account token, and patches the maintenance-pause-reconcile annotation on
 # every Db2uInstance / Db2uEngine in the instance namespace. The Db2u operator
@@ -14,7 +14,7 @@
 # variable did not resolve in the dynamic recipe. Exec into the operator pod
 # in db2-operator is not used either.
 #
-# helper-exec names a fixed namespace (db2u-bnr-recipe-helper). The
+# helper-exec names a fixed namespace (HELPER_NS in .env). The
 # parent/child restore loader fails with KeyError unless every fixed hook
 # namespace is in namespaceMapping, so each Restore maps the helper namespace
 # to itself (see ibm-backup-restore/operations/restore.yaml).
@@ -36,7 +36,7 @@ apiVersion: spp-data-protection.isf.ibm.com/v1alpha1
 kind: Recipe
 metadata:
   name: db2u-instance-helper-parent
-  namespace: ibm-spectrum-fusion-ns
+  namespace: ${FUSION_NS}
 
 spec:
   appType: db2uinstance
@@ -62,8 +62,8 @@ spec:
   hooks:
     - name: helper-exec
       type: exec
-      namespace: db2u-bnr-recipe-helper
-      labelSelector: app=db2u-bnr-recipe-helper
+      namespace: ${HELPER_NS}
+      labelSelector: app=recipe-helper
       selectResource: pod
       onError: fail
       timeout: 120

@@ -1,6 +1,11 @@
 .DS_Store
 
-# Stray credential files. The committed manifests hold <...> placeholders only.
+# Your values and the manifests rendered from them (scripts/render.sh).
+# The committed manifests hold ${NAME} placeholders only.
+.env
+build/
+
+# Stray credential files.
 **/*backup-secret*
 **/*credentials*
 

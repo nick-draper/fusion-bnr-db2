@@ -3,7 +3,7 @@ apiVersion: db2u.databases.ibm.com/v1
 kind: Db2uInstance
 metadata:
   name: dwdb # Name of the actual DB
-  namespace: db2u-instance
+  namespace: ${SOURCE_NS}
   labels:
     my.cluster/environment: prod
     for-backup: 'true'
@@ -47,7 +47,7 @@ spec:
       volumePerPartition: true
   license:
     accept: true
-    value: <Insert License>
+    value: '${DB2_LICENSE}'
   nodes: 1
   podTemplate:
     db2u:
@@ -64,7 +64,7 @@ spec:
         resources:
           requests:
             storage: 5Gi
-        storageClassName: isf-block-file-delete-sc
+        storageClassName: ${STORAGE_CLASS}
       type: create
     - name: data
       spec:
@@ -73,7 +73,7 @@ spec:
         resources:
           requests:
             storage: 10Gi
-        storageClassName: isf-block-file-delete-sc
+        storageClassName: ${STORAGE_CLASS}
       type: template
     - name: tempts
       spec:
@@ -82,7 +82,7 @@ spec:
         resources:
           requests:
             storage: 10Gi
-        storageClassName: isf-block-file-delete-sc
+        storageClassName: ${STORAGE_CLASS}
       type: template
   version: s12.1.4.0
 ...
