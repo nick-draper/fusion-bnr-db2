@@ -91,7 +91,7 @@ layouts:
     arrow: reconciles
 
 architecture:
-  title: Recipe workflow
+  title: Recipe architecture
   subtitle: The parent pauses the instance from the helper pod. The child manages resources and snapshots. Nothing runs in db2-operator.
   alt: "Recipe topology: the policy assignment names the application and the parent recipe. The parent finds the child by label. The parent runs helper-exec in the helper pod, which patches the Db2uInstance and Db2uEngine. The child runs manage_snapshots in dashmpp-head-0. The operator reconciles but runs no hooks. Only db2u-instance is backed up."
   caption: The parent pauses the instance through API calls from the helper pod, the child execs into dashmpp-head-0, and only db2u-instance is backed up.
